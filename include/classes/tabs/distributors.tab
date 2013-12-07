@@ -1,0 +1,1211 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class distributors extends home {
+
+	//page properties
+	public $title;
+
+	//distributor properties
+	public $id;
+    public $name;
+    public $account_id;
+    public $distributor_default_address1;
+    public $distributor_default_address2;
+    public $distributor_default_city;
+    public $distributor_default_state;
+    public $distributor_default_postal;
+    public $distributor_default_country;
+    public $account_type;
+    public $default_contact;
+    public $ap_contact;
+    public $ar_contact;
+    public $returns_contact;
+    public $orders_contact;
+    public $additional_contact;
+    public $active;
+
+    //accounts default contact properties
+    public $default_contact_id;
+    public $default_contact_first_name;
+    public $default_contact_last_name;
+    public $default_contact_phone_name;
+    public $default_contact_phone;
+    public $default_contact_phone_type;
+    public $default_contact_address1;
+	public $default_contact_address2;
+	public $default_contact_city;
+	public $default_contact_state;
+	public $default_contact_postal;
+	public $default_contact_country;
+
+    //accounts payable contact properties
+    public $ap_id;
+    public $ap_first_name;
+    public $ap_last_name;
+    public $ap_phone_name;
+    public $ap_phone;
+    public $ap_phone_type;
+    public $ap_address1;
+    public $ap_address2;
+    public $ap_city;
+    public $ap_state;
+    public $ap_postal;
+    public $ap_country;
+
+    //accounts receivable contact properties
+    public $ar_id;
+    public $ar_first_name;
+    public $ar_last_name;
+    public $ar_phone_name;
+    public $ar_phone;
+    public $ar_phone_type;
+    public $ar_address1;
+	public $ar_address2;
+	public $ar_city;
+	public $ar_state;
+	public $ar_postal;
+	public $ar_country;
+
+	//accounts returns contact properties
+	public $returns_id;
+	public $returns_first_name;
+    public $returns_last_name;
+    public $returns_phone_name;
+    public $returns_phone;
+    public $returns_phone_type;
+    public $returns_address1;
+    public $returns_address2;
+    public $returns_city;
+    public $returns_state;
+    public $returns_postal;
+    public $returns_country;
+
+    //accounts orders contact properties
+    public $orders_id;
+    public $orders_first_name;
+    public $orders_last_name;
+    public $orders_phone_name;
+    public $orders_phone;
+    public $orders_phone_type;
+    public $orders_address1;
+	public $orders_address2;
+	public $orders_city;
+	public $orders_state;
+	public $orders_postal;
+	public $orders_country;
+	
+	public static function checkSubmission(){
+
+		//if distributor contact information has been submitted
+		if(isset($_POST['updateDistrib'])){
+			self::updateDistributor();
+		}
+
+		//if contact association update has been submitted
+		if(isset($_GET['ucid'])){
+			self::updateAssociation("update",$_GET['ucid']);
+		}
+		
+		//if contact association assign free contact has been submitted
+		if(isset($_GET['fcid'])){
+			self::updateAssociation("insert",$_GET['fcid']);
+		}
+		
+		//if contact association remove has been submitted
+		if(isset($_GET['acid'])){
+			self::updateAssociation("remove",$_GET['acid']);
+		}
+
+	}
+
+	protected function pageBody(){
+
+		$body = array();
+
+		//checking if a distributor has been selected
+		if(!isset($_GET['dstID'])){
+
+			//setting page title
+			$this->title = 'Distributor Control Panel';
+
+			//if user has permission to edit distributors then display 
+			if(functionRights::checkRights('manageDistributor','action')){
+
+				//if a dist has not been selected then show the distributor selector
+				array_push($body,$this->selectManageDistributor());
+			}
+
+			//if user has permission to add new distributors then display button
+			if(functionRights::checkRights('createDistributor','action')){
+
+				//show the link for creating a new distributor
+				array_push($body,$this->createNewDistributor());
+			}
+			
+		} else {
+
+			if($_GET['dstID'] == 'new'){
+
+				//if user has permission to add new distributors then display form
+				if(functionRights::checkRights('createDistributor','action')){
+
+					//show form for creating a new distributor
+					array_push($body,$this->distributorForm());	
+				}
+
+			} else {
+
+				//if it has been selected then set the object property values
+				$this->setProperties($_GET['dstID']);
+
+				//checking if a distirbutor function is selected
+				if(!isset($_GET['dstfnc'])){
+
+					array_push($body,$this->selectDistributorFunction());
+
+				} elseif($_GET['dstfnc'] == 'cntct') {
+
+					//checking if associating user to distributor
+					if(isset($_GET['dstsubfnc'])){
+
+						//show form for creating a new associated user
+						if($_GET['dstsubfnc'] == 'usrmng'){
+
+							array_push($body,$this->manageAssocUsers());	
+
+						} else {
+
+							array_push($body,null);
+						}						
+
+					} else {
+
+						//show form for creating a new distributor
+						array_push($body,$this->distributorForm());
+					}					
+				} elseif($_GET['dstfnc'] == 'ordrs') {
+
+					
+					array_push($body,null);
+				}
+			}			
+		}
+
+		//creating the page body
+		return parent::tabPage($this->title,implode(null,$body));
+	}
+
+	protected function selectManageDistributor(){
+
+		$return = array();
+
+		$html= '
+		<div class="clearfix"></div>
+		<h3>Active Distributors</h3>
+		<div class="row-fluid">
+			<div class="span12">
+				<form method="get" name="manage_distirbutors">
+					<div class="row-fluid">
+						<div class="span6">
+							<input type="hidden" name="tab" value="' . $_GET['tab']  . '">
+							<select name="dstID" class="form-control">';
+
+		array_push($return, $html);
+
+		//generating list of active distributors
+		foreach(self::getDistributors() as $distributor){
+
+			$option = '<option value="' . $distributor[0] . '">' . $distributor[1] . ' (# ' . $distributor[2] . ')</option>';
+			array_push($return,$option);
+		}
+
+				
+		$html = '			</select>
+						</div>
+						<div class="span6">
+							<input type="submit" value="Select Distributor" class="btn form-control">
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+		<div class="clearfix"></div>';
+
+		array_push($return,$html);
+
+		$html= '
+		<div class="clearfix"></div>
+		<h3>Inactive Distributors</h3>
+		<div class="row-fluid">
+			<div class="span12">
+				<form method="get" name="manage_inactive_distirbutors">
+					<div class="row-fluid">
+						<div class="span6">
+							<input type="hidden" name="tab" value="' . $_GET['tab']  . '">
+							<select name="dstID" class="form-control">';
+
+		array_push($return, $html);
+
+		//generating list of inactive distributors
+		foreach(self::getDistributors(0) as $distributor){
+
+			$option = '<option value="' . $distributor[0] . '">' . $distributor[1] . ' (# ' . $distributor[2] . ')</option>';
+			array_push($return,$option);
+		}
+
+				
+		$html = '			</select>
+						</div>
+						<div class="span6">
+							<input type="submit" value="Select Distributor" class="btn form-control">
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+		<div class="clearfix"></div>';
+
+		array_push($return,$html);
+
+		return implode(null,$return);
+	}
+
+	protected function createNewDistributor(){
+
+		return '
+		<h3>New Distributors</h3>
+		<div class="row-fluid">
+			<div class="span12">
+				<form method="get" name="new_distirbutor">
+					<input type="hidden" name="tab" value="' . $_GET['tab']  . '">
+					<input type="hidden" name="dstID" value="new">
+					<input type="submit" value="Create New Distributor" class="btn btn-info form-control">
+				</form>
+			</div>
+		</div>
+		<div class="clearfix"></div>';
+	}
+
+	protected function setProperties($id){
+
+		global $mysqli;
+
+		//creating the query to grab all the necesary values
+		$stmt = $mysqli->prepare('SELECT `' . _DB_PREFIX_ . 'distributor_account`.`id`, `' . _DB_PREFIX_ . 'distributor_account`.`name`, `' . _DB_PREFIX_ . 'distributor_account`.`account_id`, `' . _DB_PREFIX_ . 'distributor_account`.`address1`, `' . _DB_PREFIX_ . 'distributor_account`.`address2`, `' . _DB_PREFIX_ . 'distributor_account`.`city`, `' . _DB_PREFIX_ . 'distributor_account`.`state`, `' . _DB_PREFIX_ . 'distributor_account`.`postal`, `' . _DB_PREFIX_ . 'distributor_account`.`country`, `' . _DB_PREFIX_ . 'distributor_account`.`account_type`, `default`.`id` AS `default_id`, `default`.`first_name` AS `default_first_name`, `default`.`last_name` AS `default_last_name`, `default`.`phone_name` AS `default_phone_name`, `default`.`phone` AS `default_phone`, `default`.`phone_type` AS `default_phone_type`, `default`.`address1` AS `default_address1`, `default`.`address2` AS `default_address2`, `default`.`city` AS `default_city`, `default`.`state` AS `default_state`, `default`.`postal_code` AS `default_postal_code`, `default`.`country` AS `default_country`, `ap`.`id` AS `ap_id`, `ap`.`first_name` AS `ap_first_name`, `ap`.`last_name` AS `ap_last_name`, `ap`.`phone_name` AS `ap_phone_name`, `ap`.`phone` AS `ap_phone`, `ap`.`phone_type` AS `ap_phone_type`, `ap`.`address1` AS `ap_address1`, `ap`.`address2` AS `ap_address2`, `ap`.`city` AS `ap_city`, `ap`.`state` AS `ap_state`, `ap`.`postal_code` AS `ap_postal_code`, `ap`.`country` AS `ap_country`, `ar`.`id` AS `ar_id`, `ar`.`first_name` AS `ar_first_name`, `ar`.`last_name` AS `ar_last_name`, `ar`.`phone_name` AS `ar_phone_name`, `ar`.`phone` AS `ar_phone`, `ar`.`phone_type` AS `ar_phone_type`, `ar`.`address1` AS `ar_address1`, `ar`.`address2` AS `ar_address2`, `ar`.`city` AS `ar_city`, `ar`.`state` AS `ar_state`, `ar`.`postal_code` AS `ar_postal_code`, `ar`.`country` AS `ar_country`, `returns`.`id` AS `returns_id`, `returns`.`first_name` AS `returns_first_name`, `returns`.`last_name` AS `returns_last_name`, `returns`.`phone_name` AS `returns_phone_name`, `returns`.`phone` AS `returns_phone`, `returns`.`phone_type` AS `returns_phone_type`, `returns`.`address1` AS `returns_address1`, `returns`.`address2` AS `returns_address2`, `returns`.`city` AS `returns_city`, `returns`.`state` AS `returns_state`, `returns`.`postal_code` AS `returns_postal_code`, `returns`.`country` AS `returns_country`, `orders`.`id` AS `orders_id`, `orders`.`first_name` AS `orders_first_name`, `orders`.`last_name` AS `orders_last_name`, `orders`.`phone_name` AS `orders_phone_name`, `orders`.`phone` AS `orders_phone`, `orders`.`phone_type` AS `orders_phone_type`, `orders`.`address1` AS `orders_address1`, `orders`.`address2` AS `orders_address2`, `orders`.`city` AS `orders_city`, `orders`.`state` AS `orders_state`, `orders`.`postal_code` AS `orders_postal_code`, `orders`.`country` AS `orders_country`, `' . _DB_PREFIX_ . 'distributor_account`.`active` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` LEFT JOIN (SELECT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1) AS `default` ON `' . _DB_PREFIX_ . 'distributor_account`.`default_contact` = `default`.`id` LEFT JOIN (SELECT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1) AS `ap` ON `' . _DB_PREFIX_ . 'distributor_account`.`ap_contact` = `ap`.`id` LEFT JOIN (SELECT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1) AS `ar` ON `' . _DB_PREFIX_ . 'distributor_account`.`ar_contact` = `ar`.`id` LEFT JOIN (SELECT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1) AS `returns` ON `' . _DB_PREFIX_ . 'distributor_account`.`returns_contact` = `returns`.`id` LEFT JOIN (SELECT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1) AS `orders` ON `' . _DB_PREFIX_ . 'distributor_account`.`orders_contact` = `orders`.`id` WHERE `' . _DB_PREFIX_ . 'distributor_account`.`id` = ?');
+
+		$stmt->bind_param('i',$id);
+		
+		$stmt->execute();
+
+		$stmt->bind_result($this->id, $this->name, $this->account_id, $this->distributor_default_address1, $this->distributor_default_address2, $this->distributor_default_city, $this->distributor_default_state, $this->distributor_default_postal, $this->distributor_default_country, $this->account_type, $this->default_contact_id, $this->default_contact_first_name, $this->default_contact_last_name, $this->default_contact_phone_name, $this->default_contact_phone, $this->default_contact_phone_type, $this->default_contact_address1, $this->default_contact_address2, $this->default_contact_city, $this->default_contact_state, $this->default_contact_postal, $this->default_contact_country, $this->ap_id, $this->ap_first_name, $this->ap_last_name, $this->ap_phone_name, $this->ap_phone, $this->ap_phone_type, $this->ap_address1, $this->ap_address2, $this->ap_city, $this->ap_state, $this->ap_postal, $this->ap_country, $this->ar_id, $this->ar_first_name, $this->ar_last_name, $this->ar_phone_name, $this->ar_phone, $this->ar_phone_type, $this->ar_address1, $this->ar_address2, $this->ar_city, $this->ar_state, $this->ar_postal, $this->ar_country, $this->returns_id, $this->returns_first_name, $this->returns_last_name, $this->returns_phone_name, $this->returns_phone, $this->returns_phone_type, $this->returns_address1, $this->returns_address2, $this->returns_city, $this->returns_state, $this->returns_postal, $this->returns_country, $this->orders_id, $this->orders_first_name, $this->orders_last_name, $this->orders_phone_name, $this->orders_phone, $this->orders_phone_type, $this->orders_address1, $this->orders_address2, $this->orders_city, $this->orders_state, $this->orders_postal, $this->orders_country,$this->active );
+
+		$stmt->fetch();
+
+	}
+
+	protected function selectDistributorFunction(){
+		$return = array();
+
+		$this->title = $this->name . ' Account';
+
+		$fluidRowStart = '<div class="row-fluid">';
+		$fluidRowEnd = '</div><div class="clearfix"></div>';
+
+		//opening fuild row
+		array_push($return,$fluidRowStart);
+
+		//checking if user has rights to view distributor contact information
+		if(functionRights::checkRights('viewDistributorContact','action')){
+			$html = '
+				<div class="span6">
+					<a href="index.php?tab=distributors&dstID=' . $_GET['dstID'] . '&dstfnc=cntct" title="Click here to View Distributor Contact Information" class="btn btn-info form-control">Contact Information</a>
+				</div>';
+
+			array_push($return,$html);
+		}
+
+		//checking if user has rights to view distributor order information
+		if(functionRights::checkRights('viewDistributorOrders','action')){
+
+			$html = '
+				<div class="span6">
+					<a href="index.php?tab=distributors&dstID=' . $_GET['dstID'] . '&dstfnc=cntct&dstsubfnc=usrmng" title="Click here to View and manage this distributors associated users" class="btn btn-success form-control">Manage Associated Users</a>
+				</div>';
+
+			array_push($return,$html);
+		} 
+			
+
+
+		//closing the fluid row
+		array_push($return,$fluidRowEnd);	
+		
+		return implode(null,$return);
+
+	}
+
+	protected function distributorForm(){
+
+		$return = array();
+		$dVersion = null;
+		$editDisabled = null;
+		$newDisabled = null;
+		$fluidRowStart = '<div class="row-fluid form-field-row">';
+		$fluidRowEnd = '</div><div class="clearfix"></div>';
+		
+
+		//checking if adding or editing dist account
+		if($_GET['dstID'] == 'new'){
+
+			//setting page title for new dist 
+			$this->title = 'Create a New Distributor Account';
+			$dVersion = $_GET['dstID'];
+			$newDisabled = ' disabled="disabled" ';
+			$submitButton = "Add New Distributor";
+
+		} else {
+
+			//setting page title for edit dist
+			$this->title = 'Manage Distributor Account Information';
+			$editDisabled = ' disabled="disabled" ';
+			$submitButton = "Update Distributor Account Information";
+
+			//setting dist object properties
+			$this->setProperties($_GET['dstID']);
+
+		}
+
+		//starting the form
+		array_push($return,'<form method="post" name="distributorInfo"><input type="hidden" name="tab" value="' . $_GET['tab']  . '"><input type="hidden" name="dstID" value="' . $_GET['dstID'] . '"><input type="hidden" name="updateDistrib" value="true">');
+
+		/////////////////////////////
+		//START FORM FIELD CREATION//
+		/////////////////////////////
+
+		//section title
+		array_push($return,'<h3>Identification</h3>');
+
+		//start new row
+		array_push($return,$fluidRowStart);
+
+		//form field - ID
+		$label = 'Distributor ID Number';
+		$fieldID = "id";
+		$formField = '<input type="text" name="id" class="form-control" disabled="disabled" value="' . $this->id . '">';
+		$formHelp = 'This is the database identification number. This number is automatically assigned and cannot be edited';
+		$formHelpPosition = 'top';
+		$spanSize = '6';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//form field - NAME
+		$label = 'Distributor Name';
+		$fieldID = "name";
+		$formField = '<input type="text" name="name" class="form-control" value="' . $this->name . '" required="required">';
+		$formHelp = 'This is the name that the distributor will be referred to as in the database.';
+		$spanSize = '6';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and start new row
+		array_push($return,$fluidRowEnd . $fluidRowStart);
+
+		//form field - ACCOUNT ID
+		$label = 'Account ID';
+		$fieldID = "account_id";
+		$formField = '<input type="text" name="account_id" class="form-control" ' . $newDisabled . ' value="' . $this->account_id . '">';
+		$formHelp = 'This value is created dynamically and can be edited after the initial creation.';
+		$spanSize = '12';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and start new row
+		array_push($return,$fluidRowEnd . $fluidRowStart);
+
+		//form field - ACTIVE
+		$label = 'Account Status';
+		$fieldID = "active";
+		$formField = '
+					<div class="onoffswitch">
+					    <input type="checkbox" name="active" class="onoffswitch-checkbox btn" id="myonoffswitch"' . checkForSelected($this->active,'1','c') . '>
+					    <label class="onoffswitch-label" for="myonoffswitch">
+					        <div class="onoffswitch-inner"></div>
+					        <div class="onoffswitch-switch"></div>
+					    </label>
+					</div>';
+		$formHelp = 'Setting this account to inactive will place all future orders into a pending status.';
+		$spanSize = '12';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and row
+		array_push($return,$fluidRowEnd);
+
+		//section title
+		array_push($return,'<h3>Distributor Location</h3>');
+
+		//start new row
+		array_push($return,$fluidRowStart);		
+
+		//form field - DISTRIBUTOR DEFAULT ADDRESS
+		$label = 'Address 1';
+		$fieldID = "distributor_default_address1";
+		$formField = '<input type="text" name="distributor_default_address1" class="form-control" required="required" value="' . $this->distributor_default_address1 . '">';
+		$formHelp = 'Address 1 field. This is the default address field. This address will be used until a separate address is selected in the management section.';
+		$spanSize = '12';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and start new row
+		array_push($return,$fluidRowEnd . $fluidRowStart);
+
+		//form field - DISTRIBUTOR DEFAULT ADDRESS 2
+		$label = 'Address 2';
+		$fieldID = "distributor_default_address2";
+		$formField = '<input type="text" name="distributor_default_address2" class="form-control" value="' . $this->distributor_default_address2 . '">';
+		$formHelp = 'Address line 2 is an optional field that should be used to include a suite / apt number';
+		$spanSize = '12';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and start new row
+		array_push($return,$fluidRowEnd . $fluidRowStart);
+
+		//form field - DISTRIBUTOR DEFAULT CITY
+		$label = 'City';
+		$fieldID = "distributor_default_city";
+		$formField = '<input type="text" name="distributor_default_city" class="form-control" required="required" value="' . $this->distributor_default_city . '">';
+		$formHelp = 'City in which the distributors primary address is located.';
+		$spanSize = '4';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//form field - DISTRIBUTOR DEFAULT STATE
+		$label = 'State';
+		$fieldID = "distributor_default_state";
+		$formField = parent::stateFormSelect('distributor_default_state',true,$this->distributor_default_state);
+		$formHelp = 'State in which the distributors primary address is located.';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+
+		//form field - DISTRIBUTOR DEFAULT POSTAL
+		$label = 'Postal Code';
+		$fieldID = "distributor_default_postal";
+		$formField = '<input type="text" name="distributor_default_postal" class="form-control" value="' . $this->distributor_default_postal . '" required="required">';
+		$formHelp = 'Postal Code in which the distributors primary address is located.';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end and start new row
+		array_push($return,$fluidRowEnd . $fluidRowStart);
+
+		//form field - DISTRIBUTOR DEFAULT COUNTRY
+		$label = 'Country';
+		$fieldID = "distributor_default_country";
+		$formField = parent::countryFormSelect('distributor_default_country',true,$this->distributor_default_country);
+		$formHelp = 'Country in which the distributors primary address is located.';
+		$spanSize = '4';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+		
+		//end row
+		array_push($return,$fluidRowEnd);
+
+		//section title
+		array_push($return,'<h3>Account Type</h3>');
+
+		//start new row
+		array_push($return,$fluidRowStart);
+
+		//form field - ACCOUNT TYPE
+		$label = 'Distributor Account Type';
+		$fieldID = "account_type";
+		$formField = '<select name="account_type" class="form-control" required="required"><option></option><option value="online"' . checkForSelected($this->account_type,'online') . '>Online Only</option><option value="store"' . checkForSelected($this->account_type,'store') . '>Storefront Only</option><option value="dual"' . checkForSelected($this->account_type,'dual') . '>Both</option><option value="test"' . checkForSelected($this->account_type,'test') . '>Test Account</option></select>';
+		$formHelp = 'Select appropriate account type<ul><li><strong>Online Only</strong></li><ul><li>Distributor has only online locations and will have a drop-ship style account only.</li></ul><li><strong>Storefront Only</strong></li><ul><li>Distributor has brick and mortar locations only and will be purchasing bulk quantities of product.</li></ul><li><strong>Hybrid</strong></li><ul><li>Distributor will require both drop-ship and bulk purchase style ordering. Do not select this method unless you are certain the customer will require both.</li></ul><li><strong>Test Account</strong></li><ul><li>This account type allows for testing of distributor processes. Any order information that is created while in this type will not be saved to the database.</li></ul>';
+		$formHelpPosition = 'top';
+		$spanSize = '12';
+		$helpAllowHTML = 'true';
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+		array_push($return,$html);
+
+		//end row
+		array_push($return,$fluidRowEnd);
+				
+		//the following fields are only displayed while editing distributors
+		if(is_null($dVersion)){
+
+			//section title
+			array_push($return,'<h3>Contacts</h3>');
+
+			//button to create new associated user
+			array_push($return,'<div class="row-fluid"><div class="span12"><input type="button" class="btn btn-info form-control" onClick="window.location.href=\'' . _ROOT_ . '/index.php?tab=distributors&dstID=' . $_GET['dstID'] . '&dstfnc=cntct&dstsubfnc=usrmng\'" title="Click here to add a new associated user." value="New / Modify User Associations"></div></div>');
+			//start new row
+			array_push($return,$fluidRowEnd . $fluidRowStart);
+
+			/////////////////////////
+			//START DEFAULT CONTACT//
+			/////////////////////////
+
+			//form field - DEFAULT CONTACT
+			$label = 'Default Contact';
+			$fieldID = "default_contact";
+
+			//constructing option list of available contact persons
+			$formField = array();
+
+			//starting select list
+			array_push($formField,'<select name="default_contact" class="form-control" required="required"><option></option>');
+			
+			//adding each enabled user
+			foreach($this->getAvailableUsers($_GET['dstID']) as $user){
+				array_push($formField,'<option value="' . $user[0] . '"' . checkForSelected($user[0],$this->default_contact_id) . '>' . $user[1] . ' ' . $user[2] . '(' . $user[3] . ')</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+
+			$formHelp = 'You may only select pre-existing associated user accounts or admin accounts. If you have not created or have not associated any accounts for this distributor please click on the `<strong>New / Modify User Associations</strong>` button above.';
+			$helpAllowHTML = 'true';
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+			array_push($return,$html);
+
+			//end row
+			array_push($return,$fluidRowEnd . $fluidRowStart);
+
+			////////////////////
+			//START AP CONTACT//
+			////////////////////
+
+			//form field - AP CONTACT
+			$label = 'Accounts Payable Contact';
+			$fieldID = "ap_contact";
+
+			//constructing option list of available contact persons
+			$formField = array();
+
+			//starting select list
+			array_push($formField,'<select name="ap_contact" class="form-control" required="required"><option></option>');
+			
+			//adding each enabled user
+			foreach($this->getAvailableUsers($_GET['dstID']) as $user){
+				array_push($formField,'<option value="' . $user[0] . '"' . checkForSelected($user[0],$this->ap_id) . '>' . $user[1] . ' ' . $user[2] . '(' . $user[3] . ')</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+			$spanSize = '6';
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+			array_push($return,$html);
+
+			////////////////////
+			//START AR CONTACT//
+			////////////////////
+
+			//form field - AP CONTACT
+			$label = 'Accounts Receivable Contact';
+			$fieldID = "ar_contact";
+
+			//constructing option list of available contact persons
+			$formField = array();
+
+			//starting select list
+			array_push($formField,'<select name="ar_contact" class="form-control" required="required"><option></option>');
+			
+			//adding each enabled user
+			foreach($this->getAvailableUsers($_GET['dstID']) as $user){
+				array_push($formField,'<option value="' . $user[0] . '"' . checkForSelected($user[0],$this->ar_id) . '>' . $user[1] . ' ' . $user[2] . '(' . $user[3] . ')</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+			array_push($return,$html);
+
+			//end row
+			array_push($return,$fluidRowEnd . $fluidRowStart);
+
+			////////////////////////
+			//START ORDERS CONTACT//
+			////////////////////////
+
+			//form field - RETURNS CONTACT
+			$label = 'Orders Contact';
+			$fieldID = "orders_contact";
+
+			//constructing option list of available contact persons
+			$formField = array();
+
+			//starting select list
+			array_push($formField,'<select name="orders_contact" class="form-control" required="required"><option></option>');
+			
+			//adding each enabled user
+			foreach($this->getAvailableUsers($_GET['dstID']) as $user){
+				array_push($formField,'<option value="' . $user[0] . '"' . checkForSelected($user[0],$this->orders_id) . '>' . $user[1] . ' ' . $user[2] . '(' . $user[3] . ')</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+			array_push($return,$html);
+
+			/////////////////////////
+			//START RETURNS CONTACT//
+			/////////////////////////
+
+			//form field - RETURNS CONTACT
+			$label = 'Returns Contact';
+			$fieldID = "returns_contact";
+
+			//constructing option list of available contact persons
+			$formField = array();
+
+			//starting select list
+			array_push($formField,'<select name="returns_contact" class="form-control" required="required"><option></option>');
+			
+			//adding each enabled user
+			foreach($this->getAvailableUsers($_GET['dstID']) as $user){
+				array_push($formField,'<option value="' . $user[0] . '"' . checkForSelected($user[0],$this->returns_id) . '>' . $user[1] . ' ' . $user[2] . '(' . $user[3] . ')</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+			array_push($return,$html);
+
+			//end row
+			array_push($return,$fluidRowEnd);
+		}
+
+		array_push($return,'<div class="clearfix spacer"></div>');
+
+		///////////////////////
+		//START SUBMIT BUTTON//
+		///////////////////////
+
+		//form field - SUBMIT
+		$label = null;
+		$fieldID = "submit";
+		$formField = '<input type="submit" value="' . $submitButton . '" class="btn btn-success form-control"></form>';
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		/////////////////////////////
+		///END FORM FIELD CREATION///
+		/////////////////////////////
+		
+		array_push($return,'<div class="clearfix"></div>');
+
+		//returning compiled page content
+		return implode(null,$return);
+	}
+
+	protected function manageAssocUsers(){
+
+		//method properties
+		$this->title = 'Alter Contact Associations';
+		$fluidRowStart = '<div class="row-fluid form-field-row">';
+		$fluidRowEnd = '</div><div class="clearfix"></div>';
+
+		$tab = '<input type="hidden" name="tab" value="' . $_GET['tab'] . '">';
+		$dstID = '<input type="hidden" name="dstID" value="' . $_GET['dstID'] . '">';
+		$dstfnc = '<input type="hidden" name="dstfnc" value="' . $_GET['dstfnc'] . '">';
+		$dstsubfnc = '<input type="hidden" name="dstsubfnc" value="' . $_GET['dstsubfnc'] . '">';
+		$formEnd = '</form>';
+
+		$associatedContacts = users::getUsers(array('distributor_id'=>$_GET['dstID']));
+		$unassociatedContacts = users::getUsers(array('distributor_id'=>'!'.$_GET['dstID']));
+		$freeContacts = users::getUsers(array('distributor_id'=>null));
+
+		$return = array();
+
+		
+		//////////////////////////
+		//START NEW CONTACT FORM//
+		//////////////////////////
+
+		//form field - ASSOCIATED CONTACTS LIST
+		$label = 'Associated Contacts';
+		$fieldID = "acid";
+		$formHelp = 'This is a list of contacts that are currently associated with this distributor';
+		$formHelpPosition = 'right';
+		$spanSize = '6';
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="acid" class="form-control"><option></option>');
+		
+		//adding each enabled user
+		foreach($associatedContacts as $user){
+			array_push($formField,'<option value="' . $user[0] . '">' . $user[1] . ' ' . $user[2] . '(' . $user[4] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+
+		$formStart = '<form name="assoc_contact" method="get">';		
+
+		$html = $formStart . $tab . $dstID . $dstfnc . $dstsubfnc . $html;
+		array_push($return,$html);
+
+		//form field - REMOVE ASSOCIATION BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" value="Disassociate Contact" class="btn btn-danger form-control" id="disassoc-cntc-btn">';
+		$formHelp = null;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return, $formEnd . $fluidRowEnd . $fluidRowStart);
+
+
+
+		//////////////////////////
+		//START NEW CONTACT FORM//
+		//////////////////////////
+
+		//form field - FREE CONTACTS LIST
+		$label = 'Free Contacts';
+		$fieldID = "fcid";
+		$formHelp = 'This is a list of contacts that are currently not associated with any distributor';
+		$formHelpPosition = 'right';
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="fcid" class="form-control"><option></option>');
+		
+		//adding each enabled user
+		foreach($freeContacts as $user){
+			array_push($formField,'<option value="' . $user[0] . '">' . $user[1] . ' ' . $user[2] . '(' . $user[4] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+
+		$formStart = '<form name="free_contact" method="get">';		
+
+		$html = $formStart . $tab . $dstID . $dstfnc . $dstsubfnc . $html;
+		array_push($return,$html);
+
+		//form field - ASSIGN ASSOCIATION BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" value="Associate Free Contact" class="btn btn-success form-control" id="assoc-cntc-btn">';
+		$formHelp = null;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return, $formEnd . $fluidRowEnd . $fluidRowStart);
+
+
+
+		//////////////////////////
+		//START NEW CONTACT FORM//
+		//////////////////////////
+
+		//form field - ASSOCIATED TO OTHER DISTRIBUTORS CONTACTS LIST
+		$label = 'Contacts Associated With Other Distributors';
+		$fieldID = "ucid";
+		$formHelp = 'This is a list of contacts that are currently associated with a different distributor. <br><b>NOTE:</b> Altering these accounts will disassociate them with their current value and reassociate them with the ' . $this->name . ' Distributor Account at their current permission level';
+		$formHelpPosition = 'right';
+		$helpAllowHTML = 'true';
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="ucid" class="form-control"><option></option>');
+		
+		//adding each enabled user
+		foreach($unassociatedContacts as $user){
+			array_push($formField,'<option value="' . $user[0] . '">' . $user[1] . ' ' . $user[2] . '(Permission Level:' . $user[4] . ' / Association: ' . $user[16] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$helpAllowHTML);
+
+		$formStart = '<form name="free_contact" method="get">';
+
+		$html = $formStart . $tab . $dstID . $dstfnc . $dstsubfnc . $html;
+		array_push($return,$html);
+
+		//form field - REASSIGN ASSOCIATION BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" value="Reassign Association" class="btn btn-warning form-control" id="reassign-cntc-btn"></form>';
+		$formHelp = null;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return,$formEnd . $fluidRowEnd);
+
+		/////////////////////////
+		//END ALL CONTACT FORMS//
+		/////////////////////////
+
+		return implode(null,$return);
+	}
+
+
+	///////////////////////////////////////////////////////////////////
+	//starting static database functions to be run on submission checks
+	///////////////////////////////////////////////////////////////////
+
+	//returns array of active distributors
+	public static function getDistributors($active=1){
+
+		global $mysqli;
+		$return = array();		
+
+		$stmt = $mysqli->prepare('SELECT DISTINCT `id`,`name`,`account_id` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` WHERE `active` = ?');
+		$stmt->bind_param('d',$active);
+		$stmt->execute();
+		$stmt->bind_result($id,$name,$account_id);
+
+		while($row = $stmt->fetch()){
+
+			//adding all values to return array
+			$value = array($id,$name,$account_id);
+
+			array_push($return,$value);
+		}
+
+		return $return;
+	}
+
+	//ARRAY VALUES: user_id, user_first_name, user_last_name, user_email, user_phone_name, user_phone, user_phone_type, user_address_type, user_address1, user_address2, user_city, user_state, user_postal_code, user_country
+	public static function getAvailableUsers($id){
+
+		global $mysqli;
+		$return = array();
+
+		//supplemental user types allowed
+		$suppUsrType= 'admin';
+
+		$stmt = $mysqli->prepare('
+SELECT DISTINCT
+    `contact`.`id`,
+    `contact`.`first_name`,
+    `contact`.`last_name`,
+    `contact`.`email`,
+    `contact`.`phone_name`,
+    `contact`.`phone`,
+    `contact`.`phone_type`,
+    `contact`.`address_type`,
+    `contact`.`address1`,
+    `contact`.`address2`,
+    `contact`.`city`,
+    `contact`.`state`,
+    `contact`.`postal_code`,
+    `contact`.`country`
+FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account`
+
+LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` 
+	ON `' . _DB_PREFIX_ . 'distributor_contact`.`distributor_id` = `' . _DB_PREFIX_ . 'distributor_account`.`id`
+RIGHT JOIN (
+	SELECT 
+        `' . _DB_PREFIX_ . 'users`.`id`,
+        `' . _DB_PREFIX_ . 'users`.`email`,
+        `' . _DB_PREFIX_ . 'users`.`first_name`,
+        `' . _DB_PREFIX_ . 'users`.`last_name`,
+        `' . _DB_PREFIX_ . 'user_phone`.`phone_name`,
+        `' . _DB_PREFIX_ . 'user_phone`.`phone`,
+        `' . _DB_PREFIX_ . 'user_phone`.`phone_type`,
+        `' . _DB_PREFIX_ . 'user_address`.`address_type`,
+        `' . _DB_PREFIX_ . 'user_address`.`address1`,
+        `' . _DB_PREFIX_ . 'user_address`.`address2`,
+        `' . _DB_PREFIX_ . 'user_address`.`city`,
+        `' . _DB_PREFIX_ . 'user_address`.`state`,
+        `' . _DB_PREFIX_ . 'user_address`.`postal_code`,
+        `' . _DB_PREFIX_ . 'user_address`.`country`,
+        `' . _DB_PREFIX_ . 'users`.`user_type`
+    FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users`
+    LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` 
+    	ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_address`.`user_id`
+    LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` 
+    	ON `' . _DB_PREFIX_ . 'users`.`id` = `' . _DB_PREFIX_ . 'user_phone`.`user_id` AND `' . _DB_PREFIX_ . 'user_phone`.`preferred` = 1
+) AS `contact` 
+	ON (`contact`.`id` = `' . _DB_PREFIX_ . 'distributor_contact`.`assoc_user_id`) OR (`contact`.`user_type` = ?) 
+WHERE (`' . _DB_PREFIX_ . 'distributor_account`.`id` = ?)');
+
+		$stmt->bind_param('si', $suppUsrType, $id);
+		$stmt->execute();
+		$stmt->bind_result($user_id, $user_first_name, $user_last_name, $user_email, $user_phone_name, $user_phone, $user_phone_type, $user_address_type, $user_address1, $user_address2, $user_city, $user_state, $user_postal_code, $user_country);
+
+		while($row = $stmt->fetch()){
+
+			$value = array($user_id, $user_first_name, $user_last_name, $user_email, $user_phone_name, $user_phone, $user_phone_type, $user_address_type, $user_address1, $user_address2, $user_city, $user_state, $user_postal_code, $user_country);
+
+			//adding all values to return array
+			array_push($return,$value);
+		}
+
+		return $return;
+	}	
+
+	public static function updateDistributor(){
+
+		global $mysqli;
+
+		//array of all post values to look for
+		$postArray = array('name','account_id','distributor_default_address1','distributor_default_address2','distributor_default_city','distributor_default_state','distributor_default_postal','distributor_default_country','account_type','default_contact','ap_contact','ar_contact','orders_contact','returns_contact','active');
+
+		//corresponding array of table column names for update / insert purposes
+		$fieldArray= array('name','account_id','address1','address2','city','state','postal','country','account_type','default_contact','ap_contact','ar_contact','orders_contact','returns_contact','active');
+
+		//corresponding array of table column names for update / insert purposes
+		$fieldTypeArray= array('s','s','s','s','s','s','s','s','s','i','i','i','i','i','d');
+
+		//array for inserting the fields to be updated
+		$updatePostValues = array();
+		$updateDBFields = array();
+		$updateFieldType = array();
+
+		for($i=0;$i<count($postArray);$i++){
+
+			//checking if the post value was submitted
+			if((isset($_POST[$postArray[$i]]) && !is_null($_POST[$postArray[$i]])) || in_array($postArray[$i], array('account_id','active'))){
+				
+				//setting the default value for account_id
+				if($postArray[$i] == 'account_id' && $_POST['dstID'] == 'new'){
+					 
+					$postValue = strtolower(substr($_POST['name'],0,3)) . '-dst';
+
+				} elseif($postArray[$i] == 'active'){
+
+					//checking if active was submitted and setting the correct value
+					if(isset($_POST['active'])){
+						$postValue = 1;
+					} else {
+						$postValue = 0;
+					}
+
+				} else {
+
+					$postValue = $_POST[$postArray[$i]];
+				}
+
+				//adding to the array of active post value
+				array_push($updatePostValues,$postValue);
+
+				//adding to the array of active post value
+				array_push($updateDBFields,$fieldArray[$i]);
+
+				//adding to the string type
+				array_push($updateFieldType,$fieldTypeArray[$i]);
+			}
+		}
+
+		//setting arrays for confguring query content
+		$query = array();
+		$dbFields = array();
+		$dbValues = array();
+
+		//checking if this is a new distributor or not		
+		if($_POST['dstID'] == 'new'){
+
+			//start query
+			$push = 'INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` (`';
+			array_push($query,$push);			
+
+			//adding submitted fields and question marks for prepared statement
+			foreach($updateDBFields as $field){
+
+				array_push($dbFields,$field);
+				array_push($dbValues,'?');
+			}
+
+			//adding query content
+			array_push($query,implode('`,`',$dbFields));
+			array_push($query,'`) VALUES (');
+			array_push($query,implode(',',$dbValues));
+			array_push($query,')');
+
+			//imploding query to a string
+			$query = implode(null,$query);
+
+			if($stmt = $mysqli->prepare($query)){
+
+				//setting field type variable
+				$fieldType = implode(null,$updateFieldType);
+
+				//setting the params to be bound
+				$params = array_merge(array($fieldType), $updatePostValues);
+
+				//binding params which must be run through refValues
+				call_user_func_array(array($stmt, "bind_param"),self::refValues($params));
+
+				//executing query
+				$stmt->execute();
+				$stmt->close();	
+
+				//calling the newly inserted value to that we can redirect to the edit page using the new id
+				$stmt = $mysqli->query('SELECT DISTINCT `id` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` WHERE `name` = \'' . $_POST['name'] . '\'');
+
+				//setting the id value
+				while($row = $stmt->fetch_array()){
+					$id = $row['id'];
+				}	
+
+				//creating success message
+				$message = 'addedNewDistrib';
+
+			} else {
+
+				$id = 'new';
+				//creating success message
+				$message = 'addNewDistribError';
+
+			}
+
+		} else {
+
+			//if this is an edit VS a new insert
+			$id = $_POST['dstID'];		
+
+			//adding submitted fields and question marks for prepared statement
+			foreach($updateDBFields as $field){
+
+				array_push($dbFields,'`' . $field . '` = ?');
+			}
+
+			//writing query
+			$query = 'UPDATE `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` SET ' . implode(',',$dbFields) . ' WHERE `id` = ?';
+
+			if($stmt = $mysqli->prepare($query)){
+
+				//setting field type variable
+				$fieldType = implode(null,$updateFieldType) . 'i';
+
+				//adding the id value to the post values array
+				array_push($updatePostValues,$id);
+
+				//setting the params to be bound
+				$params = array_merge(array($fieldType), $updatePostValues);
+
+				//binding params which must be run through refValues
+				call_user_func_array(array($stmt, "bind_param"),self::refValues($params));
+
+				//executing query
+				$stmt->execute();
+				$stmt->close();	
+					
+				$message = 'updatedDistribSuccess';	
+
+			} else {
+
+				$message = 'updatedDistribError';	
+			}
+
+			
+
+		}
+
+		//redirecting to edit page with distributor displayed
+		header('Location: ' . _ROOT_ . '/index.php?tab=distributors&dstID=' . $id . '&dstfnc=cntct&msg=' . $message);
+
+	}	
+
+	public static function refValues($arr){
+
+	    if (strnatcmp(phpversion(),'5.3') >= 0) //Reference is required for PHP 5.3+
+	    {
+	        $refs = array();
+	        foreach($arr as $key => $value)
+	            $refs[$key] = &$arr[$key];
+	        return $refs;
+	    }
+	    return $arr;
+	}
+
+	//applies changes to the database
+	public static function updateAssociation($type,$assoc_user_id){
+
+		global $mysqli;
+
+		//if the type value is an insert or array
+		if(in_array($type,array('insert','remove'))){			
+
+
+			if($type == 'insert'){
+
+				//if this is an insert
+				$query = 'INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` (`distributor_id`,`assoc_user_id`) VALUES(' . $_GET['dstID'] . ', ' . $assoc_user_id . ')';
+
+			} elseif($type == 'remove'){
+
+				//if this is a delete
+				$query = 'DELETE FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` WHERE `distributor_id` = ' . $_GET['dstID'] . ' AND `assoc_user_id` ='  . $assoc_user_id ;
+
+			} 
+
+			//run the update / delete
+			if($stmt = $mysqli->query($query)){
+
+				return true;
+
+			} else {
+
+				return false;
+			}
+
+		} elseif($type == 'update'){
+
+			//delete the current record
+			$query = 'DELETE FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` WHERE `distributor_id` = ' . $_GET['dstID'] . ' AND `assoc_user_id` ='  . $assoc_user_id ;
+			$stmt = $mysqli->query($query);
+			
+
+			//insert a new record
+			$query = 'INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` (`distributor_id`,`assoc_user_id`) VALUES (' . $_GET['dstID'] . ', ' . $assoc_user_id . ')';
+			$stmt = $mysqli->query($query);
+			
+			
+			return true;
+		} 
+
+				
+	}
+	
+}
+
+?>

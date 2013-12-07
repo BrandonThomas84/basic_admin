@@ -1,0 +1,576 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class products extends home {
+
+	//page properties
+	public $title;
+	public $pageBody;
+	public $tab;
+	public $pfnc;
+	public $tabActive;
+
+	//product table properties
+	public $mpn;
+	public $manufacturer;
+	public $upc;
+	public $active;
+
+	//inventory properties
+	public $qty_on_hand;
+	public $prev_order;
+	public $next_order;
+
+	//product language properties
+	public $productTitle;
+	public $description;
+
+	//product pricing properties
+	public $cost;
+	public $dealer_price;
+	public $map_price;
+
+	public static function checkSubmission(){
+
+		//checking for new / manage product post
+		if(isset($_POST['pfnc'])){
+
+			self::manageProductDatabase();
+			
+		}
+	}
+
+	public function pageBody(){
+		
+		$this->constructPage();
+
+		//passing to parent home class compiler
+		return parent::tabPage($this->title,$this->pageBody);
+		
+	}
+
+	protected function constructPage(){
+
+		$return = array();
+		$this->title = null;
+		$this->pageBody = null;
+
+		//set object properties
+		$this->setProperties();
+
+		if(isset($_GET['pfnc'])){
+
+			//getting function value
+			$function = $_GET['pfnc'];
+
+			if($function == 'newprd'){
+				
+				//checking function rights
+				if(functionRights::checkRights('newProduct','action')){
+					$this->title = 'Add New Product';
+					$this->pageBody = $this->manageProduct();
+				} 
+
+			} elseif($function == 'mngprd'){
+
+				//checking if product is selected
+				if(!isset($_GET['mngID'])){
+
+					//checking function rights
+					if(functionRights::checkRights('manageProduct','action')){
+						$this->title = 'Select a Product to Edit';
+						$this->pageBody = $this->selectManageProduct();
+					}
+
+				} else {
+
+					//checking function rights
+					if(functionRights::checkRights('manageProduct','action')){
+						$this->getProductInfo($_GET['mngID']);
+						$this->title = 'Manage Existing Product';
+						$this->pageBody = $this->manageProduct();
+					}
+				}				
+
+			} elseif($function == 'prdspec'){
+
+
+			}
+
+		} else {
+
+			$this->title = 'Manage Products';
+
+			$html = '<div class="row-fluid">';
+			array_push($return,$html);
+
+			//checking function rights
+			if(functionRights::checkRights('newProduct','action')){
+				$html = '
+					<div class="span6">
+						<form name="addNewProduct" method="get">
+							<input type="hidden" name="tab" value="' . $this->tab . '">
+							<input type="hidden" name="pfnc" value="newprd">
+							<input type="submit" value="Add New Product" class="btn form-control">
+						</form>
+					</div>';
+				array_push($return,$html);
+			}
+
+			if(functionRights::checkRights('manageProduct','action')){
+				$html = '
+					<div class="span6">
+						<form name="manageProducts" method="get">
+							<input type="hidden" name="tab" value="' . $this->tab . '">
+							<input type="hidden" name="pfnc" value="mngprd">
+							<input type="submit" value="Manage Products" class="btn form-control">
+						</form>
+					</div>';
+				array_push($return,$html);
+			}
+
+			$html = '</div>';
+			array_push($return,$html);
+
+			//setting pageBody property
+			$this->pageBody = implode(null,$return);
+
+		}
+	}
+
+	protected function setProperties(){
+
+		$this->tab ='products';
+		
+	}
+
+	protected function selectManageProduct(){
+
+		$return = array();
+
+		$html= '
+		<div class="row-fluid">
+			<div class="span12">
+				<h3>Select a Product to Edit</h3>
+				<form method="get" name="manage_SelectProduct">
+					<div class="row-fluid">
+						<div class="span6">
+							<input type="hidden" name="tab" value="' . $this->tab  . '">
+							<input type="hidden" name="pfnc" value="' . $_GET['pfnc'] . '">
+							<select name="mngID" class="form-control">';
+
+		array_push($return, $html);
+
+		foreach(inventory::getProducts() as $product){
+
+			//checking if product has been selected
+			if(isset($_GET['mngID']) && $_GET['mngID'] == $product[0]){
+
+				$selected = ' selected ';
+
+			} else {
+
+				$selected = null;
+
+			}
+
+			$option = '<option value="' . $product[0] . '"' . $selected . '>' . $product[1] . ' - ' . $product[2] . '</option>';
+			array_push($return,$option);
+		}
+
+				
+		$html = '			</select>
+						</div>
+						<div class="span6">
+							<input type="submit" value="Select Product" class="btn btn-success form-control">
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+		<div class="clearfix"></div>';
+
+		array_push($return,$html);
+
+		return implode(null,$return);
+	}
+
+	protected function manageProduct($pfnc=null,$id=null,$tab='products'){
+		
+		$return = array();
+
+		//setting method variables
+		if(is_null($pfnc)){
+
+			$pfnc=$_GET['pfnc'];
+		}
+
+		if(is_null($id)){
+
+			//verifying that there is an id set in the url and grabbing the value
+			if(isset($_GET['mngID'])){
+
+				$id=$_GET['mngID'];
+			} 
+		}
+
+		//checking if product is active
+		if($this->active == 1 || $this->active = true){
+		 	
+			$yes = ' SELECTED ';
+		 	$no = null;
+
+		} else {
+
+		 	$yes = null;
+		 	$no = ' SELECTED ';
+		}
+
+		//setting change variables
+		if($pfnc == 'newprd'){
+			
+			$submit = 'Add New Product';
+
+		} elseif($pfnc == 'mngprd') {
+
+			$submit = 'Update Product';
+		}
+
+		$html = '
+			<form name="productManager" method="post" id="productEditor">
+			<div class="row-fluid">
+				<div class="span6">					
+					<input type="hidden" name="tab" value="' . $tab . '">
+					<input type="hidden" name="pfnc" value="' . $pfnc . '">
+					<input type="hidden" name="id" value="' . $id . '">
+					<p class="prdLabel">Master Product Number (MPN)<span>*</span></p>
+					<input type="text" name="mpn" class="form-control" required="required" value="' . $this->mpn . '">
+				</div>
+				<div class="span6">
+					<p class="prdLabel">Manufacturer Name<span>*</span></p>
+					<input type="text" name="manufacturer" class="form-control" value="' . $this->manufacturer . '" onfocus="if(this.value == \'' . $this->manufacturer . '\') { this.value = \'\'; }" required="required">
+				</div>
+			</div>
+			<div class="clearfix"></div>
+			<div class="row-fluid">
+				<div class="span6">					
+					<p class="prdLabel">UPC</p>
+					<input type="text" name="upc" class="form-control" value="' . $this->upc . '">
+				</div>
+				<div class="span6">
+					<p class="prdLabel">Active Product<span>*</span></p>
+					<select name="active" class="form-control">
+						<option value="1"' . $yes . '>Yes</option>
+						<option value="0"' . $no . '>No</option>
+					</select>
+				</div>
+			</div>
+			<div class="clearfix"></div>
+			<div class="row-fluid">
+				<div class="span6">					
+					<p class="prdLabel">Inventory Available<span>*</span></p>
+					<input type="text" name="qty_on_hand" class="form-control" required="required" value="' . $this->qty_on_hand . '">
+					<br>
+					<div class="row">
+						<div class="span4 prdPricing">
+							<span class="prd-curr">
+								<p class="prdLabel">Cost<span>*</span></p>
+								$
+								<input type="text" name="cost" class="form-control" required="required" value="' . $this->cost . '">
+							</span>
+						</div>
+						<div class="span4 prdPricing">
+							<span class="prd-curr">
+								<p class="prdLabel">Dealer Net Pricing<span>*</span></p>
+								$
+								<input type="text" name="dealer_price" class="form-control" required="required" value="' . $this->dealer_price . '">
+							</span>
+						</div>
+						<div class="span4 prdPricing">
+							<span class="prd-curr">
+								<p class="prdLabel">Map Price<span>*</span></p>
+								$
+								<input type="text" name="map_price" class="form-control" required="required" value="' . $this->map_price . '">
+							</span>
+						</div>
+					</div>
+					<div class="clearfix"></div>
+				</div>
+				<div class="span6">
+					<p class="prdLabel">Original Order Date<span>*</span></p>
+					
+					<!-- http://glad.github.io/glDatePicker/ -->
+					<input type="text" name="prev_order" id="mydate" gldp-id="mydate" class="form-control" required="required" value="' . $this->prev_order . '">
+					<div gldp-el="mydate" style="width: 304px; height:250px; position:absolute; top:70px; left:100px;">
+					</div>
+					<p class="prdLabel">Next Order Date<span>*</span></p>
+					
+					<!-- http://glad.github.io/glDatePicker/ -->
+					<input type="text" name="next_order" id="mydate2" gldp-id="mydate2" class="form-control" required="required" value="' . $this->next_order . '">
+					<div gldp-el="mydate2" style="width: 304px; height:250px; position:absolute; top:70px; left:100px;">
+					</div>
+				</div>
+			</div>
+			<div class="clearfix"></div>
+			<div class="row-fluid">
+				<div class="span12">					
+					<p class="prdLabel">Product Title<span>*</span></p>
+					<input type="text" name="title" class="form-control" value="' . $this->productTitle . '">
+				</div>
+			</div>
+			<div class="clearfix"></div>
+			<div class="row-fluid">
+				<div class="span12">
+					<p class="prdLabel">Product Description<span>*</span></p>
+					
+					<textarea name="descriptionEdit" id="htmlTextArea" class="form-control" rows="20">' . $this->description . '</textarea>
+
+					<input type="hidden" name="description" id="description">
+				</div>
+			</div>
+			<div class="clearfix spacer"></div>
+			<div class="row-fluid">
+				<div class="span12" style="text-align: center;">
+					<input type="button" value="' . $submit . '" class="btn btn-success form-control" id="productFormSubmit">
+				</div>
+			</div>
+
+			</form>';
+
+		array_push($return,$html);
+
+		return implode(null,$return);
+	}
+
+	protected function getProductInfo($id){
+
+		global $mysqli;
+
+		//getting product ID number
+		if($stmt = $mysqli->prepare('SELECT DISTINCT `product`.`id`, `product`.`mpn`, `product`.`manufacturer`, `product`.`upc`, `product`.`active`, `product_inventory`.`qty_on_hand`, `product_inventory`.`prev_order`, `product_inventory`.`next_order`, `product_lang`.`title`, `product_lang`.`description`, `product_pricing`.`cost`, `product_pricing`.`dealer_price`, `product_pricing`.`map_price` FROM `' . _DB_NAME_ . '`.`product` LEFT JOIN `' . _DB_NAME_ . '`.`product_lang` ON `product`.`id` = `product_lang`.`product_id` LEFT JOIN `' . _DB_NAME_ . '`.`product_inventory` ON `product`.`id` = `product_inventory`.`product_id` LEFT JOIN `' . _DB_NAME_ . '`.`product_pricing` ON `product`.`id` = `product_pricing`.`product_id` WHERE `product`.`id` = ?')){
+			$stmt->bind_param('i',$id);
+			$stmt->execute();
+			$stmt->bind_result($this->id,$this->mpn,$this->manufacturer,$this->upc,$this->active,$this->qty_on_hand,$this->prev_order,$this->next_order,$this->productTitle,$this->description,$this->cost,$this->dealer_price,$this->map_price);
+			$stmt->store_result();
+			$stmt->fetch();	
+
+			//dataclean up
+			$this->prev_order = date('m/d/Y', strtotime($this->prev_order));
+			$this->next_order = date('m/d/Y', strtotime($this->next_order));
+			$this->cost = number_format($this->cost,2);
+			$this->dealer_price = number_format($this->dealer_price,2);
+			$this->map_price = number_format($this->map_price,2);
+
+
+		} else {
+			var_dump($stmt);
+		}
+
+	}
+
+	/////////////////////////////////////////////////////////////////
+	//static submission functions
+	/////////////////////////////////////////////////////////////////
+
+	public static function manageProductDatabase(){
+
+		$tab = $_POST['tab'];
+		$pfnc = $_POST['pfnc'];
+		if(isset($_POST['id'])){$id = $_POST['id'];} else {$id = null;}
+		$mpn = $_POST['mpn'];
+		$manufacturer = $_POST['manufacturer'];
+		$active = $_POST['active'];
+		$qty_on_hand = $_POST['qty_on_hand'];
+		$prev_order = $_POST['prev_order'];
+		$next_order = $_POST['next_order'];
+		$productTitle = $_POST['title'];
+		$description = $_POST['description'];
+		$cost = $_POST['cost'];
+		$dealer_price = $_POST['dealer_price'];
+		$map_price = $_POST['map_price'];
+		if(isset($_POST['upc'])){$upc = $_POST['upc'];} else {$upc = null;}
+
+		//running product table insert functions
+		self::productTableInteract($mpn,$manufacturer,$active,$upc,$id);
+
+		//checking to see if the id variable is still null
+		if(is_null($id)){$id = self::getProductID('mpn',$mpn);}
+
+		//running inventory table insert functions
+		self::inventoryTableInteract($id,$qty_on_hand,$prev_order,$next_order);
+
+		//running language table insert functions
+		self::languageTableInteract($id,$productTitle,$description);
+
+		//running pricing table insert functions
+		self::pricingTableInteract($id,$cost,$dealer_price,$map_price);
+		
+		//if new product redirect to the manage page with a success message
+		if($pfnc == 'newprd'){
+			header('Location: ' . _ROOT_ . '/index.php?tab=products&pfnc=mngprd&mngID=' . $id . '&msg=newPrdSuc');	
+		}
+		
+	}
+
+	public static function getProductID($field,$value,$table='product'){
+
+		global $mysqli;
+
+		//getting product ID number
+		if($stmt = $mysqli->prepare('SELECT `id` FROM `' . _DB_NAME_ . '`.`' . $table . '` WHERE ' . $field . ' = \'' . $value . '\'')){
+			
+			$stmt->execute();
+			$stmt->bind_result($id);
+			$stmt->store_result();
+			$stmt->fetch();
+
+			return $id;
+
+		} else {
+			return false;
+		}
+	}
+
+	public static function productTableInteract($mpn,$manufacturer,$active,$upc,$id=null){
+
+		if(!is_null($mpn) || !is_null($$manufacturer)){
+
+			global $mysqli;
+
+			//checking if this is an new insert or an update
+			if(is_null($id)){
+
+				//inserting product table values
+				if($stmt = $mysqli->prepare('INSERT INTO `' . _DB_NAME_ . '`.`product` (`mpn`,`manufacturer`,`active`,`upc`) VALUES (?,?,?,?)')){
+					
+					$stmt->bind_param('ssdi',$mpn,$manufacturer,$active,$upc);
+
+				} else {
+					var_dump($stmt);
+				}	
+			} else {
+
+				//updating product table values
+				if($stmt = $mysqli->prepare('UPDATE `' . _DB_NAME_ . '`.`product` SET `mpn` = ?, `manufacturer` = ?, `active` = ?, `upc` = ? WHERE `id` = ?')){
+					
+					$stmt->bind_param('ssdii',$mpn,$manufacturer,$active,$upc,$id);
+
+				} else {
+					var_dump($stmt);
+				}
+			}
+
+			$stmt->execute();
+			$stmt->close();
+		}
+	}
+
+	public static function inventoryTableInteract($id,$qty_on_hand,$prev_order,$next_order){
+
+		if(!is_null($qty_on_hand) || !is_null($prev_order) || !is_null($next_order)){
+			global $mysqli;
+		
+			//converting posted values to acceptable format
+			$prev_order = date('Y-m-d',strtotime($prev_order));
+			$next_order = date('Y-m-d',strtotime($next_order));	
+
+			//checking if new or update
+			if(self::getProductID('product_id',$id,'product_inventory') == false){
+
+				//inserting inventory table values
+				if($stmt = $mysqli->prepare('INSERT INTO `' . _DB_NAME_ . '`.`product_inventory` (`product_id`,`qty_on_hand`,`prev_order`,`next_order`) VALUES (?,?,?,?)')){
+					
+					$stmt->bind_param('iiss',$id,$qty_on_hand,$prev_order,$next_order);
+
+				} else {
+					var_dump($stmt);
+				}
+
+			} else {
+
+				//updating inventory table values
+				if($stmt = $mysqli->prepare('UPDATE `' . _DB_NAME_ . '`.`product_inventory` SET `qty_on_hand` = ?, `prev_order` = ?, `next_order` = ? WHERE `product_id` = ?')){
+
+					$stmt->bind_param('issi',$qty_on_hand,$prev_order,$next_order,$id);				
+
+				} else {
+					var_dump($stmt);
+				}
+
+			}
+
+			$stmt->execute();
+			$stmt->close();
+		}		
+	}
+
+	public static function languageTableInteract($id,$productTitle,$description){
+
+		if(!is_null($productTitle) || !is_null($description)){
+
+			global $mysqli;
+
+			//checking new or update
+			if(self::getProductID('product_id',$id,'product_lang') == false){
+
+				//inserting languange table values
+				if($stmt = $mysqli->prepare('INSERT INTO `' . _DB_NAME_ . '`.`product_lang` (`product_id`,`title`,`description`) VALUES (?,?,?)')){
+					
+					$stmt->bind_param('iss',$id,$productTitle,$description);
+
+				} else {
+					var_dump($stmt);
+				}
+			} else {
+
+				//inserting languange table values
+				if($stmt = $mysqli->prepare('UPDATE `' . _DB_NAME_ . '`.`product_lang` SET `title` = ?, `description` = ? WHERE `product_id` = ?')){
+					
+					$stmt->bind_param('ssi',$productTitle,$description,$id);				
+
+				} else {
+					var_dump($stmt);
+				}
+			}
+
+			$stmt->execute();
+			$stmt->close();
+		} 
+	}
+
+	public static function pricingTableInteract($id,$cost,$dealer_price,$map_price){
+
+		if(!is_null($cost) || !is_null($dealer_price) || !is_null($map_price)){
+
+			global $mysqli;
+
+			//checking new or update
+			if(self::getProductID('product_id',$id,'product_pricing') == false){
+
+				//inserting languange table values
+				if($stmt = $mysqli->prepare('INSERT INTO `' . _DB_NAME_ . '`.`product_pricing` (`product_id`,`cost`, `dealer_price`, `map_price`) VALUES(?,?,?,?)')){
+					
+					$stmt->bind_param('isss',$id,$cost,$dealer_price,$map_price);
+
+				} else {
+					var_dump($stmt);
+				}		
+			} else {
+
+				//inserting languange table values
+				if($stmt = $mysqli->prepare('UPDATE `' . _DB_NAME_ . '`.`product_pricing` SET `cost` = ?, `dealer_price` = ?, `map_price` = ? WHERE `product_id` = ?')){
+					
+					$stmt->bind_param('sssi',$cost,$dealer_price,$map_price,$id);
+
+				} else {
+					var_dump($stmt);
+				}
+			}
+
+			$stmt->execute();
+			$stmt->close();
+		}
+	}
+}
+
+?>

@@ -1,0 +1,1143 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class users extends home {
+
+	//page properties
+	public $title;
+	public $message;
+
+	public function pageBody(){
+
+		$this->fluidRowStart = '<div class="row-fluid control-row">';
+		$this->fluidRowEnd = '</div><div class="clearfix"></div>';
+		$this->formEnd = '</form>';
+
+		//checks if function has been selected
+		if(isset($_GET['ufnc'])){
+
+			$function = $_GET['ufnc'];
+
+			//if function is approve pending users
+			if($function == 'apu'){
+
+				//default page
+				$this->title = 'Users Pending Approval';
+
+				//display the pending users area
+				$pageBody = self::pendingUsers();
+
+			} elseif($function == 'du'){
+
+				//if function is approve pending users
+
+				$this->title = 'Deactivate Users';
+
+				//display the pending users area
+				$pageBody = self::activeUsers();
+
+				//creating the page body
+				return parent::tabPage($this->title,$pageBody);	
+			} elseif($function == 'uda'){
+
+				//if function is approve pending users
+
+				$this->title = 'User Account Associations';
+
+				//display the pending users area
+				$pageBody = self::distributorAssociations(true);
+
+				//creating the page body
+				return parent::tabPage($this->title,$pageBody);	
+			} elseif($function == 'ufr'){
+
+				//display the pending users area
+				if(!isset($_GET['user_id']) && !isset($_GET['mngfrall'])){
+
+					$this->title = 'Function Rights Manager';
+					
+					$subtitle = '<h3>Individual User Rights</h3>';
+					$pageBody = $subtitle . self::distributorAssociations();
+					
+					$subtitle = '<div class="clearfix spacer"></div><h3>Function Right Settings</h3>';
+					$this->fluidRowStart = '<div class="row-fluid control-row">';
+					$this->fluidRowEnd = '</div><div class="clearfix"></div>';
+					$content = $this->fluidRowStart . '<div class="span12"><a href="' . _ROOT_ . '/index.php?tab=users&ufnc=ufr&mngfrall=true" title="Click here to manage function rights settings. " class="btn form-control">Function Rights Settings</a></div>' . $this->fluidRowEnd;
+					$pageBody = $pageBody . $subtitle . $content;
+
+				} elseif(isset($_GET['user_id'])) {
+
+					$this->title = 'User Function Rights';
+					$pageBody = null;
+
+				} elseif(isset($_GET['mngfrall'])){
+
+					//checking if profile is set
+					if(isset($_GET['prf']) && $_GET['prf'] !== 'n'){
+						
+						$profileName = self::getProfiles('WHERE `id` = ' . $_GET['prf']);
+						$this->title = ucfirst($profileName[0][1]) . ' Profile Function Right Settings';
+
+					} else {
+						
+						$this->title = 'Manage Profile Function Rights';
+					}
+
+					$pageBody = $this->manageFunctionRights();						
+
+				}
+				
+
+				//creating the page body
+				return parent::tabPage($this->title,$pageBody);	
+			}
+
+		} else {
+
+			//default page
+			$this->title = 'Manage Users';
+
+			//creating the page body
+			$pageBody = $this->homePage();	
+		}	
+
+		//creating the page body
+		return parent::tabPage($this->title,$pageBody);
+	}
+
+	public static function checkSubmission(){
+
+		//checks for approve user submission
+		if(isset($_GET['approveUser'])){
+
+			if(functionRights::checkRights('manageUserStatus','action')){
+				self::updateUserInformation('approve',$_GET['user_id'],'basic');
+			}
+
+		}
+
+		//checks for refuse user submission
+		if(isset($_GET['refuseUser'])){
+
+			if(functionRights::checkRights('manageUserStatus','action')){
+				self::updateUserInformation('refuse',$_GET['user_id'],'refused');
+			}
+
+		}
+
+		//checks for deactivate user submission
+		if(isset($_GET['deactivateUser'])){
+
+			if(functionRights::checkRights('manageUserStatus','action')){
+				self::updateUserInformation('deactivate',$_GET['user_id'],'inactive');
+			}
+
+		}
+
+		//checks for deactivate user submission
+		if(isset($_GET['assocUser'])){
+
+			if(functionRights::checkRights('manageUserAccountAssoc','action')){
+				self::updateUserAssociation($_GET['user_id'],$_GET['dstID']);
+			}
+
+		}
+
+		//checks for profile function right changes
+		if(isset($_POST['prf'])){
+
+			if(functionRights::checkRights('manageFunctionProfiles','action')){
+				self::updateProfileFunctionRights($_POST['prf']);
+			}
+
+		}
+
+		//checks for remove profile command
+		if(isset($_GET['deleteProfile'])){
+
+			if(functionRights::checkRights('deleteProfile','action')){
+				self::removeFunctionRightProfile($_GET['prf']);
+			}
+
+		}
+	} 
+
+	protected function homePage(){
+
+		$return = array();		
+
+		//checkes if the current user has access to the method (all method functions should be within this 'IF')
+		if(functionRights::checkRights('manageUsers','action')){
+
+			//add all buttons to this area
+			array_push($return, $this->fluidRowStart);
+
+			array_push($return, '<div class="span6"><a href="' . _ROOT_ . '/index.php?tab=users&ufnc=apu" title="Click here to approve pending users" class="btn form-control">Approve Pending Users</a></div>');
+			array_push($return, '<div class="span6"><a href="' . _ROOT_ . '/index.php?tab=users&ufnc=du" title="Click here to deactivate a user" class="btn form-control">Deactivate User Accounts</a></div>');
+			
+			array_push($return, $this->fluidRowEnd . $this->fluidRowStart);
+
+			//checks for user account association manage
+			if(functionRights::checkRights('manageUserAccountAssoc','action')){
+			
+				array_push($return,'<div class="span6"><a href="' . _ROOT_ . '/index.php?tab=users&ufnc=uda" title="Click here to associate users with distributor accounts" class="btn form-control">Manage Distributor Associations</a></div>');
+			}
+
+			//checks for user function right manage
+			if(functionRights::checkRights('functionRightManage','action')){
+			
+				array_push($return,'<div class="span6"><a href="' . _ROOT_ . '/index.php?tab=users&ufnc=ufr" title="Click here to to manage users function rights" class="btn form-control">Manage Function Rights</a></div>');
+			}
+
+			array_push($return, $this->fluidRowEnd);
+
+		}
+
+		//returning the imploded array
+		return implode(null,$return);
+	}
+
+	protected function pendingUsers(){
+
+		$return = array();
+		
+		//getUsers variables
+		$where = array('user_type' => 'pending approval');
+		$includePending = true;
+		$includeRefused = false;
+		$includeDeactivated = false;
+		
+
+		//tab value to be included in the form to make sure that we navigate back to the correct page
+		$tab = '<input type="hidden" name="tab" value="' . $_GET['tab'] . '">';
+
+		//ufnc value to be included in the form to make sure that we navigate back to the correct page
+		$ufnc = '<input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '">';		
+
+		//////////////////////////
+		//START NEW CONTACT FORM//
+		//////////////////////////
+
+		//form field - PENDING CONTACTS LIST
+		$label = 'Users Awaiting Approval';
+		$fieldID = "user_id";
+		$formHelp = 'This is a list of users awaiting approval. Users will not be able to login nor access distributor account information, such as orders and available inventory, until they have been approved.';
+		$formHelpPosition = 'right';
+		$spanSize = 6;
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="user_id" class="form-control" required="required"><option></option>');
+
+		//get users array
+		$users = self::getUsers($where,null,$includePending,$includeRefused,$includeDeactivated);
+		
+		//adding each user
+		foreach($users as $user){
+			array_push($formField,'<option value="' . $user[0] . '">' . $user[1] . ' ' . $user[2] . '(' . $user[4] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+
+		$formStart = '<form name="pending_user" method="get">';		
+
+		$html = $formStart . $tab . $ufnc . $html;
+		array_push($return,$html);
+
+		//form field - APPROVE BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" name="approveUser" value="Approve User" class="btn btn-success form-control">';
+		$formHelp = null;
+		$spanSize = 3;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//form field - REFUSE BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" name="refuseUser" value="Refuse User" class="btn btn-danger form-control">';
+		$formHelp = null;
+		$spanSize = 3;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return, $this->formEnd . $this->fluidRowEnd . $this->fluidRowStart);
+
+		return implode(null,$return);
+		
+	}
+
+	protected function activeUsers(){
+
+		$return = array();
+		$where = null;
+		$includePending = false;
+		$includeRefused = false;
+		$includeDeactivated = false;
+
+		//check if distributor is selected
+		if(!isset($_GET['dstID']) || $_GET['dstID'] == 'na'){
+
+			$dstID = 'dummy';
+
+		} else {
+
+			$dstID = $_GET['dstID'];
+
+			//getUsers variables
+			$where = array('distributor_id' => $_GET['dstID']);
+
+		}
+
+		//tab value to be included in the form to make sure that we navigate back to the correct page
+		$tab = '<input type="hidden" name="tab" value="' . $_GET['tab'] . '">';
+
+		//ufnc value to be included in the form to make sure that we navigate back to the correct page
+		$ufnc = '<input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '">';		
+
+		///////////////////////
+		//START NEW USER FORM//
+		///////////////////////
+
+		//form field - ACTIVE CONTACTS LIST
+		$label = 'Active Users';
+		$fieldID = "user_id";
+		$formHelp = 'This is a list of users who currently have active user accounts. If you would like to only view active users for a single account please select the account below.';
+		$formHelpPosition = 'right';
+		$spanSize = 6;
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="user_id" class="form-control" required="required"><option></option>');
+
+		//get users array
+		$users = self::getUsers($where);
+		
+		//adding each user
+		foreach($users as $user){
+			array_push($formField,'<option value="' . $user[0] . '">' . $user[1] . ' ' . $user[2] . '(' . $user[4] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+
+		$formStart = '<form name="active_users" method="get">';		
+
+		$html = $formStart . $tab . $ufnc . $html;
+		array_push($return,$html);
+
+		//form field - APPROVE BUTTON
+		$fieldID = "submit";
+		$formField = '<input type="submit" name="deactivateUser" value="Deactivate User" class="btn btn-danger form-control">';
+		$formHelp = null;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return, $this->formEnd . $this->fluidRowEnd . $this->fluidRowStart);
+
+
+		//////////////////////////////
+		//START NEW DISTRIBUTOR FORM//
+		//////////////////////////////
+
+		array_push($return,self::distributorForm('form'));
+
+		return implode(null,$return);
+		
+	}
+
+	protected function distributorAssociations($includeDistributors=null){
+
+		$return = array();
+		$where = null;
+		$includePending = true;
+		$includeRefused = true;
+		$includeDeactivated = true;
+
+		//tab value to be included in the form to make sure that we navigate back to the correct page
+		$tab = '<input type="hidden" name="tab" value="' . $_GET['tab'] . '">';
+
+		//ufnc value to be included in the form to make sure that we navigate back to the correct page
+		$ufnc = '<input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '">';	
+
+		///////////////////////
+		//START NEW USER FORM//
+		///////////////////////
+
+		//form field - ACTIVE CONTACTS LIST
+		if($includeDistributors == true){
+
+			$spanSize = 6;
+			$formHelpAdd = '<br><br>It should be noted that users will only be able to view information that pertains to their associated distributors.';
+
+		} else {
+			
+			$spanSize = 12;
+			$formHelpAdd = null;
+
+		}
+
+		$label = 'Select User';
+		$fieldID = "user_id";
+		$formHelp = 'This is a list of users who have registered accounts. They are organized by their current distributor association.' . $formHelpAdd;
+		$formHelpPosition = 'right';
+		
+		$formAllowHTML = true;
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="user_id" class="form-control" required="required"><option></option>');
+
+		//get users array ordered by distributor name
+		$users = self::getUsers(null,array('distributor_name','ASC'));
+		
+		//adding each user
+		for($i=0;$i<count($users);$i++){
+
+			$first = false;
+			$last = false;
+			$newGroup = false;
+
+			if($i == 0){
+
+				//checking if first value
+				$first = true;
+
+			} elseif($i == (count($users) - 1)){
+
+				//checking if last value
+				$last = true;
+			}
+
+			//check if this is first user and adding an option group if so
+			if($first){
+				array_push($formField,'<optgroup label="' . ucfirst($users[$i][17]) . '">');
+			} else {
+
+				//check if a new group (close previous and start a new) should be applie
+				if($users[$i-1][16] !== $users[$i][16]){
+
+					//checking if user is unassociated
+					if(!is_null($users[$i][16])){
+						$optGroupLabel = $users[$i][17];
+					} else {
+						$optGroupLabel = 'Unassociated Users';
+					} 
+
+					array_push($formField,'</optgroup><optgroup label="' . ucfirst($optGroupLabel) . '">');
+				}	
+			}
+
+			
+
+			//adding the option value to the array
+			array_push($formField,'<option value="' . $users[$i][0] . '">' . $users[$i][1] . ' ' . $users[$i][2] . '</option>');
+
+			//check if current user is part of the same group as previous 
+			if($last){
+				array_push($formField,'</optgroup>');
+			}
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$formAllowHTML);
+
+		$formStart = '<form name="active_users" method="get">';		
+
+		$html = $formStart . $tab . $ufnc . $html;
+		array_push($return,$html);
+
+		//checks if it should include the distributor form element
+		if($includeDistributors == true){
+
+			//add distributor list to form
+			array_push($return,self::distributorForm('element'));	
+			$formField = '<input type="submit" name="assocUser" value="Associate Accounts" class="btn btn-success form-control">';
+		} else {
+			$formField = '<input type="submit" value="Select User" class="btn btn-success form-control">';
+		}
+		
+
+		//form field - ASSOCIATE ACCOUNT BUTTON
+		$fieldID = "submit";
+		$formHelp = null;
+		$spanSize = 12;
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+		array_push($return,$html);
+
+		//end row
+		array_push($return, $this->formEnd . $this->fluidRowEnd . $this->fluidRowStart);
+
+		return implode(null,$return);
+
+	}
+
+	protected function manageFunctionRights(){
+
+		$return = array();
+
+		
+		//form settings based on selected profile
+		if(isset($_GET['prf'])){
+
+			//checking if new profile creation
+			if($_GET['prf'] == 'n'){
+				
+				$profileRights = array();
+				$formTitle = '<h3>New Profile</h3>';
+				$formField = '<input type="text" name="profile_name" required="required" class="form-control">';
+				$label = 'Profile Name';
+				$fieldID = 'profile_name';
+				$formHelp = 'Assign a name to the new profile here.';
+				$formHelpPosition = 'right';
+				$spanSize = 12;
+
+				//constructing the form field
+				$newField = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize) . '<div class="clearfix" style="margin-bottom: 40px;"></div>';
+
+				//text to be used on the submit button
+				$submitButton = 'Create New Profile';
+				$submitAlert = null;
+				$javascript = null;
+				$deleteProfile = null;
+
+			} else {
+
+				$profileName = self::getProfiles('WHERE `id` = ' . $_GET['prf']);
+				$profileRights = self::getFunctionRights('WHERE `profile_id` = ' . $_GET['prf']);
+				$formTitle = '<h3>' . ucfirst($profileName[0][1]) . ' Profile</h3>';
+				$newField = null;
+				$submitButton = 'Edit Profile Function Right Settings';
+				$submitAlert = null;
+				$javascript = '<script>function deleteProfileConfirm(){var r=confirm("Are you sure you want to delete this profile? Users who are currently assigned this profile will not be affected however it is recommended that you assign them a new profile if you intend on not bringing this one back.");if (r==true){$("#deleteProfile").submit()}}</script>';
+				$deleteProfile = '
+				<div class="delProfile">
+					<form name="deleteProfile" id="deleteProfile" method="get">
+						<input type="hidden" name="deleteProfile" value="true">
+						<input type="hidden" name="tab" value="' . $_GET['tab'] . '">
+						<input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '">
+						<input type="hidden" name="mngfrall" value="' . $_GET['mngfrall'] . '">
+						<input type="hidden" name="prf" value="' . $_GET['prf'] . '">
+						<input type="submit" class="btn btn-danger form-control" value="Delete Profile" onclick="deleteProfileConfirm()">
+					</form>
+				</div>';
+			}
+
+			array_push($return,$formTitle);
+			array_push($return,$deleteProfile);
+
+			//adding the start of the form
+			$formStart = '<form name="function_right_profiles" method="post" id="function-rights"><input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '"><input type="hidden" name="prf" value="' . $_GET['prf'] . '">' . $newField;
+			
+			array_push($return,$formStart);
+
+			//create base list of function rights
+			$distinctRights = array();
+			$distinctProfileRights = array();
+
+			$functionRights = self::getFunctionRights();
+			
+
+			//creating a distinct list of ALL available function rights
+			foreach($functionRights as $right){
+
+				//if the function name is not present then add it
+				if(!array_key_exists($right[0],$distinctRights)){
+
+					//checking if this is a class and if so adding a note to the help link
+					if($right[1] == 'class'){
+						
+						$helpNote = '<strong>Note:</strong><br> Enabling this will display the corresponding tab to the user.</br></br>';
+						$value = $helpNote . $right[3];
+						$valueType = '<i style="font-size: 10px;"> - Tab</i>';
+
+					} else {
+						$value = $right[3];
+						$valueType = '<i style="font-size: 10px;"> - ' . $right[1] . '</i>';
+					}
+
+					$distinctRights[$right[0]] = array($value,$right[1],$valueType);
+				}
+			}
+
+			//creating a distinct list of profile function rights
+			foreach($profileRights as $right){
+
+				array_push($distinctProfileRights,$right[0]);
+			}
+
+			//creating a form element for each function right
+			foreach($distinctRights as $name=>$description){							
+
+				if(in_array($name,$distinctProfileRights)){
+					$checked = ' CHECKED ';
+				} else {
+					$checked = null;
+				}
+
+				//profile form field
+				$formField = '
+					<div class="onoffswitch" style="width: 150px !important; margin: auto !important; margin-bottom: 20px !important;">
+					    <input type="checkbox" name="' . $name . '" class="onoffswitch-checkbox btn"' . $checked  . ' id="' . $name . '">
+					    <label class="onoffswitch-label" for="' . $name . '">
+					        <div class="onoffswitch-inner"></div>
+					        <div class="onoffswitch-switch"></div>
+					    </label>
+					</div>';
+				$label = '<p class="function-' . $description[1] . '">' . preg_replace('/(?<!\ )[A-Z]/', ' $0', ucfirst($name)) . $description[2] .'</p>';
+				$fieldID = $name;
+				$formHelp = str_replace(array('"','\''),' ', $description[0]);
+				$formHelpPosition = 'top';
+				$formAllowHTML = true;
+				$spanSize = 3;
+
+				//constructing the form field
+				$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$formAllowHTML);
+
+				array_push($return,$html);			
+			}
+
+			//adding javascript for profile update submit
+			array_push($return,$javascript);
+			
+			//creating submit button
+			$fieldID = "submit";
+			$formField = '<input type="submit" value="' . $submitButton . '" class="btn btn-success form-control" ' . $submitAlert . '>';
+			$formHelp = null;
+			$spanSize = 12;
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+			array_push($return,$html);
+
+		} else {
+
+			//profile form field
+			$formField = array();
+			$label = 'User Profiles';
+			$fieldID = "prf";
+			$formHelp = 'You can either edit an existing profile or create a brand new one by selecting \'New Profile\' from this menu.';
+			$formHelpPosition = 'right';
+			$spanSize = 6;
+			$formAllowHTML = true;
+
+			//starting select list
+			array_push($formField,'<select name="prf" onchange="this.form.submit()" class="form-control" required="required"><option></option><option value="n">New Profile</option>');
+
+			//get profiles array
+			$profiles = self::getProfiles();
+			
+			//adding each profile
+			foreach($profiles as $profile){
+				array_push($formField,'<option value="' . $profile[0] . '">' . ucfirst($profile[1]) . '</option>');
+			}
+
+			//closing select list
+			array_push($formField, '</select>');
+			
+			//change array to string
+			$formField = implode(null,$formField);
+
+			//constructing the form field
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$formAllowHTML);	
+
+			//adding the start of the form
+			$formStart = '<form name="function_right_profiles" method="get"><input type="hidden" name="tab" value="' . $_GET['tab'] . '"><input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '"><input type="hidden" name="mngfrall" value="' . $_GET['mngfrall'] . '">';
+			$html = $formStart . $html;
+			array_push($return,$html);
+
+		}
+		
+		//adding the end of the form
+		array_push($return,$this->formEnd . '<div class="clearfix space"></div>');
+
+		return implode(null,$return);
+	}
+
+
+	///////////////////////////////////////////////////////////////////
+	//starting static database functions to be run on submission checks
+	///////////////////////////////////////////////////////////////////
+
+	//generates a form option list of distributors
+	public static function distributorForm($contentType=null,$spanSize=null,$formHelpPosition=null,$formHelp=null,$fieldID=null,$label=null){
+
+		$return = array();
+
+		//setting formField values if left null
+		if(is_null($label)){$label = 'Distributor Accounts';}
+		if(is_null($fieldID)){$fieldID = "dstID";}
+		if(is_null($formHelp)){$formHelp = 'This is a list of distributors who currently have active accounts.';}
+		if(is_null($formHelpPosition)){$formHelpPosition = 'right';}
+		if(is_null($spanSize)){$spanSize = 6;}
+
+		//constructing option list of available contact persons
+		$formField = array();
+
+		//starting select list
+		array_push($formField,'<select name="dstID" class="form-control" required="required"><option></option>');
+
+		//get users array
+		$distributorArray = distributors::getDistributors();
+
+		//adding each distributor
+		foreach($distributorArray as $dist){
+
+			//checking to see if there is a selected distributor
+			if(isset($_GET['dstID'])){
+				$dstID = $_GET['dstID'];
+			} else {
+				$dstID = null;
+			}
+
+			array_push($formField,'<option value="' . $dist[0] . '"' . checkForSelected($dist[0],$dstID) . '>' . $dist[1] . '(' . $dist[2] . ')</option>');
+		}
+
+		//closing select list
+		array_push($formField, '</select>');
+		
+		//change array to string
+		$formField = implode(null,$formField);
+
+		$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+
+		//checks content type callback (form OR element)
+		if($contentType == 'form'){
+
+			//tab value to be included in the form to make sure that we navigate back to the correct page
+			$tab = '<input type="hidden" name="tab" value="' . $_GET['tab'] . '">';
+
+			//ufnc value to be included in the form to make sure that we navigate back to the correct page
+			$ufnc = '<input type="hidden" name="ufnc" value="' . $_GET['ufnc'] . '">';	
+
+			$formStart = '<form name="distributor_users" method="get">';
+			$formEnd = '</form>';
+			
+			//including the hidden form elements in the return form
+			$html = $formStart . $tab . $ufnc . $html;
+			array_push($return,$html);
+
+			//form field - SELECT DISTRIBUTOR BUTTON
+			$fieldID = "submit";
+			$formField = '<input type="submit" value="Select Distributor" class="btn btn-info form-control">';
+			$formHelp = null;
+			$html = parent::formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize);
+			array_push($return,$html);
+			
+			//end row
+			array_push($return, $formEnd);
+
+		} else {
+			
+			//adding option box to return
+			array_push($return,$html);	
+		}
+
+		return implode(null,$return);
+	}
+
+	//returns array of users
+	public static function getUsers($where=null,$orderBy=null,$includePending=false,$includeRefused=false,$includeDeactivated=false){
+
+		/*
+		
+		//////////////////////////////////////////////////
+
+		Returns array if true, false if not
+		array = id, first_name, last_name, email, user_type, address_type, address1, address2, city, state, postal_code, country, phone_name, phone_type, phone, preferred_phone, distributor_id, distributor_email
+
+		//////////////////////////////////////////////////
+
+		Where:
+
+		Method can be called in one of the following ways:
+
+		Field equal to value: 		array( '[field name]' => $_GET['dstID'] )
+		Field not equal to value: 	array( '[field name]' => '!' . $_GET['dstID'] )
+		
+		Field is null: 				array( '[field name]' => null )
+		Field is not null: 			array( '[field name]' => '!' . null )
+
+		Field is in: 				array( '[field name]' => array( [value],[value],..) )
+		Field is not in: 			array( '[field name]' => '!' . array( [value],[value],..) )
+
+		All users:					BLANK;
+
+		//////////////////////////////////////////////////
+
+		//////////////////////////////////////////////////
+
+		Options:
+
+		If $includePending set to true, all pending users will be included in the return result
+		If $includeRefused set to true, all refused users will be included in the return result
+		If $includeDeactivated set to true, all inactive users will be included in the return result
+		If $orderBy should be the an array: array([field name],[ASC] OR [DESC]) return field name you want ordered by, default is ASC
+
+		//////////////////////////////////////////////////
+
+		*/
+
+		global $mysqli;
+
+		if($includePending == false){
+			$includePending = '\'pending approval\'';
+		} else {
+			$includePending = '\'dummy\'';
+		}
+
+		if($includeRefused == false){
+			$includeRefused = '\'refused\'';
+		} else {
+			$includeRefused = '\'dummy\'';
+		}
+
+		if($includeDeactivated == false){
+			$includeDeactivated = '\'inactive\'';
+		} else {
+			$includeDeactivated = '\'dummy\'';
+		}
+
+		if(!is_null($orderBy)){
+			$orderBy = ' ORDER BY ' . $orderBy[0] . ' ' . $orderBy[1];
+		}
+
+		//if a where has not been set, $where proper format: [array({COLUMN} => {VALUE},{COLUMN} => {VALUE}...)]
+		if(!is_null($where)){
+
+			$whereConstruct = array();
+
+			
+			foreach ($where as $key => $value) {
+
+				//checking if the submitted value has a sub array in which case an "IN" statement is used
+				if(is_array($value)){
+
+					//checking for negative request
+					if(substr($value,0,1) == '!'){
+						
+						//starting in statement
+						$push = '(`' . $key . '` NOT IN (';
+
+					} else {
+						
+						//starting in statement
+						$push = '(`' . $key . '` IN (';
+					}
+
+					//blank array for each of the array subpart values
+					$valArray = array();
+
+					foreach ($value as $val){
+
+						$val = '\'' . $val . '\'';
+						array_push($valArray,$val);
+					}
+
+					//imploding "IN" array
+					$valArray = implode(',',$valArray);
+
+					//combining the full push statement
+					$push = $push . $valArray . '))';
+
+				} elseif(is_null($value) && !is_null($key)) {
+					//if a null value is being submitted
+
+					//checking for negative request
+					if(substr($value,0,1) == '!'){
+						
+						$push = '(`' . $key . '` IS NOT NULL)';	
+
+					} else {
+						
+						$push = '(`' . $key . '` IS NULL)';
+					}
+
+				} else {
+
+					//checking for negative request
+					if(substr($value,0,1) == '!'){
+						
+						$push = '(`' . $key . '` != \'' . str_replace('!',null,$value) . '\' )';
+
+					} else {
+						
+						//if not an array then a standard value comparison is used
+						$push = '(`' . $key . '` = \'' . $value . '\' )';
+					}				
+					
+				}
+
+				//adding the created value to the $whereConstruct array
+				array_push($whereConstruct,$push);
+
+			}
+
+			array_push($whereConstruct,'(`' . _DB_PREFIX_ . 'users`.`user_type` NOT IN (' . $includeRefused . ',' . $includePending . ',' . $includeDeactivated . '))');
+
+			//combining all the pieces of the where statement
+			$whereConstruct = ' WHERE ' . implode(' AND ',$whereConstruct);
+
+		} else {
+
+			//if the method property [where] is null then the where statement in the query will be blank
+			$whereConstruct = 'WHERE (`' . _DB_PREFIX_ . 'users`.`user_type` NOT IN (' . $includeRefused . ',' . $includePending . ',' . $includeDeactivated . '))';
+		}
+
+		if($stmt = $mysqli->query('SELECT DISTINCT `' . _DB_PREFIX_ . 'users`.`id`, `' . _DB_PREFIX_ . 'users`.`first_name`, `' . _DB_PREFIX_ . 'users`.`last_name`, `' . _DB_PREFIX_ . 'users`.`email`, `' . _DB_PREFIX_ . 'users`.`user_type`, `' . _DB_PREFIX_ . 'user_address`.`address_type`, `' . _DB_PREFIX_ . 'user_address`.`address1`, `' . _DB_PREFIX_ . 'user_address`.`address2`, `' . _DB_PREFIX_ . 'user_address`.`city`, `' . _DB_PREFIX_ . 'user_address`.`state`, `' . _DB_PREFIX_ . 'user_address`.`postal_code`, `' . _DB_PREFIX_ . 'user_address`.`country`, `' . _DB_PREFIX_ . 'user_phone`.`phone_name`, `' . _DB_PREFIX_ . 'user_phone`.`phone_type`, `' . _DB_PREFIX_ . 'user_phone`.`phone`, `' . _DB_PREFIX_ . 'user_phone`.`preferred` AS `preferred_phone`, `' . _DB_PREFIX_ . 'distributor_contact`.`distributor_id`, `' . _DB_PREFIX_ . 'distributor_account`.`name` AS `distributor_name` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_address` ON `' . _DB_PREFIX_ . 'user_address`.`user_id` = `' . _DB_PREFIX_ . 'users`.`id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'user_phone` ON `' . _DB_PREFIX_ . 'user_phone`.`user_id` = `' . _DB_PREFIX_ . 'users`.`id`  LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` ON `' . _DB_PREFIX_ . 'distributor_contact`.`assoc_user_id` = `' . _DB_PREFIX_ . 'users`.`id` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_account` ON `' . _DB_PREFIX_ . 'distributor_account`.`id` = `' . _DB_PREFIX_ . 'distributor_contact`.`distributor_id` ' . $whereConstruct . $orderBy)){
+
+			$return = array();
+
+			//setting the return array values
+			while($row = $stmt->fetch_array()){
+				$id = $row['id'];
+				$first_name = $row['first_name'];
+				$last_name = $row['last_name'];
+				$email = $row['email'];
+				$user_type = $row['user_type'];
+				$address_type = $row['address_type'];
+				$address1 = $row['address1'];
+				$address2 = $row['address2'];
+				$city = $row['city'];
+				$state = $row['state'];
+				$postal_code = $row['postal_code'];
+				$country = $row['country'];
+				$phone_name = $row['phone_name'];
+				$phone_type = $row['phone_type'];
+				$phone = $row['phone'];
+				$preferred_phone = $row['preferred_phone'];
+				$distributor_id = $row['distributor_id'];
+				$distributor_name = $row['distributor_name'];
+				
+
+				//adding array of values to the return array
+				array_push($return,array($id, $first_name, $last_name, $email, $user_type, $address_type, $address1, $address2, $city, $state, $postal_code, $country, $phone_name, $phone_type, $phone, $preferred_phone, $distributor_id,$distributor_name)); 
+			}
+
+			return $return;
+
+		} else {
+
+			//if statement fails
+			return false;
+		}
+	}
+
+	public static function updateUserInformation($function_type,$id,$user_type){
+
+		global $mysqli;
+
+		$query = 'UPDATE `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'users` SET `user_type` = \'' . $user_type . '\' WHERE `id` = ' . $id;
+
+		//checking the function type to determine the query to be run
+		if($function_type == 'approve'){
+			
+			$message = 'userApproveSuccess';
+
+		} elseif($function_type == 'refuse'){
+			
+			$message = 'userRefuseSuccess';
+
+		} elseif($function_type == 'deactivate'){
+			
+			$message = 'userDeactivateSuccess';
+
+		}
+
+		//running the update and setting a return message on success
+		if(!$stmt = $mysqli->query($query)){
+
+			$message = 'userUpdateFail';
+
+		}
+
+		//redirecting to edit page with distributor displayed
+		header('Location: ' . _ROOT_ . '/index.php?tab=' . $_GET['tab'] . '&msg=' . $message);
+
+	}
+
+	public static function updateUserAssociation($user_id,$distributor_id){
+
+		global $mysqli;
+
+		if($stmt = $mysqli->prepare('SELECT `id` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` WHERE `assoc_user_id` = ?')){
+
+			$stmt->bind_param('s',$user_id);
+			$stmt->execute();
+			$stmt->bind_result($id);
+			$stmt->fetch();	
+
+			if(is_null($id)){
+				$query = 'INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` (`distributor_id`,`assoc_user_id`) VALUES(\'' . $distributor_id . '\',\'' . $user_id . '\')';
+			} else {
+				$query = 'UPDATE `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'distributor_contact` SET `distributor_id` = ' . $distributor_id . ' WHERE `assoc_user_id` = ' . $user_id;
+			}
+
+			$stmt->close();
+		}
+		
+		$message = 'userUserAssocSuccess';
+
+		//running the update and setting a return message on success
+		if(!$stmt = $mysqli->query($query)){
+
+			$message = 'userUserAssocFail';
+
+		}
+
+		//redirecting to edit page with distributor displayed
+		header('Location: ' . _ROOT_ . '/index.php?tab=' . $_GET['tab'] . '&ufnc=uda&msg=' . $message);
+
+	}
+
+	public static function getFunctionRights($where=null){
+
+		global $mysqli;
+
+		if($stmt = $mysqli->query('SELECT DISTINCT `' . _DB_PREFIX_ . 'function_rights`.`function_name`, `function_type`,`parent_class`,`' . _DB_PREFIX_ . 'function_rights_description`.`description` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights` LEFT JOIN `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights_description` ON `' . _DB_PREFIX_ . 'function_rights`.`function_name` = `' . _DB_PREFIX_ . 'function_rights_description`.`function_name`' . $where . ' ORDER BY CASE `function_type` WHEN \'class\' THEN 1 WHEN \'method\' THEN 2 WHEN \'action\' THEN 3 END, `function_name` ')){
+
+			$return = array();
+
+			//setting the return array values
+			while($row = $stmt->fetch_array()){
+				$function_name = $row['function_name'];
+				$function_type = $row['function_type'];
+				$parent_class = $row['parent_class'];
+				$description = $row['description'];				
+
+				//adding array of values to the return array
+				array_push($return,array($function_name, $function_type, $parent_class, $description)); 
+			}
+
+			return $return;
+
+		} else {
+
+			//if statement fails
+			return false;
+		}
+	}
+
+	public static function getProfiles($where=null){
+
+		global $mysqli;
+
+		if($stmt = $mysqli->query('SELECT DISTINCT `id`,`profile_name` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights_profiles` ' . $where)){
+
+			$return = array();
+
+			//setting the return array values
+			while($row = $stmt->fetch_array()){
+				$id = $row['id'];
+				$profile_name = $row['profile_name'];				
+
+				//adding array of values to the return array
+				array_push($return,array($id, $profile_name)); 
+			}
+
+			return $return;
+
+		} else {
+
+			//if statement fails
+			return false;
+		}
+	}
+
+	public static function updateProfileFunctionRights($profile_id){
+
+		global $mysqli;
+
+		//if this is a new profile insert profile then retrieve id number
+		if($profile_id == 'n'){
+
+			//insert new profile name
+			$stmt = $mysqli->query('INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights_profiles` (`profile_name`) VALUES(\'' . $_POST['profile_name'] . '\')');
+
+			//select the newly insert profile
+			$stmt = $mysqli->query('SELECT `id` FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights_profiles` WHERE `profile_name` = \'' . $_POST['profile_name'] . '\'');
+			
+			$row = $stmt->fetch_array();
+			$profile_id = $row['id'];
+
+			$message = 'newProfileSuccess';
+		} else {
+			$message = 'editProfileSuccess';
+		}
+
+		//get list of potentially submitted function rights
+		$functionRights = self::getFunctionRights();
+
+		foreach($functionRights as $right){
+
+			//check if POST is set
+			if(isset($_POST[$right[0]])){
+
+				//checks if this is a class and if so then setting parent_class value to null
+				if($right[1] == 'class'){
+					$parentClass = 'NULL';
+				} else {
+					$parentClass = '\'' . $right[2] . '\'';
+				}
+
+				$mysqli->query('INSERT INTO `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights` (`user_id`,`profile_id`,`function_name`,`function_type`,`parent_class`) VALUES(0,' . $profile_id . ',\'' . $right[0] . '\',\'' . $right[1] . '\',' . $parentClass .')');
+			} else {
+
+				//attempts to remove function right
+				$mysqli->query('DELETE FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights` WHERE `profile_id` =  ' . $profile_id . ' AND `function_name` = \'' . $right[0] . '\'');
+
+			}
+		}
+
+		//redirecting to the newly / current profile page
+		header('Location: ' . _ROOT_ . '/index.php?tab=' . $_GET['tab'] . '&ufnc=ufr&mngfrall=true&prf=' . $profile_id . '&msg=' . $message);
+	}
+
+	public static function removeFunctionRightProfile($profile_id){
+
+		//making sure not trying to delete one of the standard profiles
+		if( $profile_id > 6 ){
+			global $mysqli;
+
+			//delete all function rights associated with the profile
+			$mysqli->query('DELETE FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights` WHERE `profile_id` = ' . $profile_id);
+
+			//delete profile
+			$mysqli->query('DELETE FROM `' . _DB_NAME_ . '`.`' . _DB_PREFIX_ . 'function_rights_profiles` WHERE `id` = ' . $profile_id);
+
+			//redirecting to the back to the main function rights page
+			header('Location: ' . _ROOT_ . '/index.php?tab=' . $_GET['tab'] . '&ufnc=ufr&msg=profileRemoved');
+
+		} else {
+
+			//redirecting with an error informing the user that they cannot remove core profiles
+			header('Location: ' . _ROOT_ . '/index.php?tab=' . $_GET['tab'] . '&ufnc=ufr&mngfrall=true&prf=' . $profile_id . '&msg=profileRemoveDeny');
+		}
+
+	}
+}
+
+
+
+?>

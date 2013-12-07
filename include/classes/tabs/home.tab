@@ -1,0 +1,244 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class home {
+
+	//html content for the page
+	public $pageBody;
+	public $navTab;
+	public $tabHome;
+	public $title;
+	public $tabActive;
+
+	//html var values
+	public $rowSep;
+
+	public function home() {
+
+		//starting mysqli
+		global $mysqli;
+
+		//setting the default row separator value to be used in control page compiling
+		$this->rowSep = '</div><div class="clearfix"></div><div class="row-fluid control-row">';
+
+		//setting tabHome
+		$this->tabHome = '<a href="' . _ROOT_ . '/' . get_called_class() . '" class="tabHome" title="Click here to return to the ' . ucfirst(get_called_class()) . ' start page">Return to ' . ucfirst(get_called_class()) . '</a>';
+
+		//ensures that all users can see home
+		if(get_called_class() == 'home'){
+
+			$this->pageBody = $this->pageBody();
+			$this->navTab = $this->navTab();
+
+		} else {
+
+			//checking if user has access rights to the page contents and the nav tab
+			if(!functionRights::checkRights(get_called_class())){
+
+					$this->pageBody = null;
+					$this->navTab = null;
+
+			} else {
+				
+				$this->pageBody = $this->pageBody();
+				$this->navTab = $this->navTab();
+				
+			}
+		}		
+	}
+
+	protected function pageBody() {
+
+		return '<p>This is the ' . get_called_class() . ' class page body!</p>';
+	}
+
+	protected function navTab() {
+
+		$returnArray = array();
+
+		//default active status
+		$active = null;	
+
+		//checking if active tab is set and if so applying an active setting
+		if(isset($_GET['tab'])){
+
+			//if active tab is current array tab
+			if($_GET['tab'] == strtolower(get_called_class())){
+
+				//adding the active value to the html
+				$active = ' active';
+
+			} 
+		} else {
+
+			//if no tab is set then check to see if we are currently configuring the home tab
+			if(get_called_class() == 'home'){
+
+				$active = ' active';
+
+			}
+		} 
+
+		//writing menu html
+		return '<li class="navtab-item' . $active . '""><a href="' . _ROOT_ . '/' . strtolower(get_called_class()) . '">' . ucfirst(get_called_class()) . '</a></li>';
+
+	}
+
+	protected static function tabPage($title,$body){
+
+		//checking if there is a value set for HTTP_REFERER (not a manuall entered URL)
+		if(isset($_SERVER['HTTP_REFERER'])){
+			$back = '<a href="' . $_SERVER['HTTP_REFERER'] . '" class="tabBack"><< Previous Screen</a>';
+		} else {
+			$back = null;
+		}
+
+		return '
+		<div class="container">
+			<h2 class="section-head">' . $title . '</h2>
+			<div class="row-fluid form">
+				' . $body . '
+				<div class="clearfix spacer"></div>
+				' . $back . '
+			</div>
+		</div>';
+	}
+
+	protected static function formField($label,$fieldID,$formField,$formHelp,$formHelpPosition,$spanSize,$allowHTML='false'){
+
+		//if the requested form element is a submit button then this will omit the help information
+		if($fieldID == 'submit'){
+
+			$help = '
+				<div class="span12">
+					<div class="formHelpButton">
+					</div>
+				</div>
+				<div class="clearfix"></div>';
+
+		} else {
+
+			$help = '				
+				<div class="span12">
+					<div class="formHelpButton">
+						<span>' . $label . '</span>
+						<a id="' . $fieldID. 'formHelpButton" class="btn" data-toggle="popover" data-placement="' . $formHelpPosition . '" data-content="' . $formHelp . '" data-original-title="What does this do?" data-animation="true" data-html="' . $allowHTML . '">?</a>
+					</div>
+					<script>
+						$(\'#' . $fieldID. 'formHelpButton\').popover();
+						$(document).keyup(function(e) {
+						  if (e.keyCode == 27) { $(\'#' . $fieldID. 'formHelpButton\').popover(\'hide\'); }
+						});						
+					</script>
+				</div>
+				<div class="clearfix"></div>';
+		}
+
+		$html = '
+			<div class="row formLabel">
+				<div class="span' . $spanSize . '">
+					' . $help .'
+					<div class="row formfield">
+						<div class="span12">
+							' . $formField . '
+						</div>
+					</div>
+				</div>
+			</div>';
+
+			return $html;
+
+	}
+
+	protected static function stateFormSelect($name,$required=null,$selected=null){
+
+		if(!is_null($required)){
+			$required = ' required="required" ';
+		}
+
+		return '
+		<select name="' . $name . '"' . $required. ' class="form-control">
+			<option></option>
+			<optgroup label="States">
+				<option value="Alabama"' . checkForSelected($selected,'USA') . '>Alabama</option>
+				<option value="Alaska"' . checkForSelected($selected,'Alaska') . '>Alaska</option>
+				<option value="Arizona"' . checkForSelected($selected,'Arizona') . '>Arizona</option>
+				<option value="Arkansas"' . checkForSelected($selected,'Arkansas') . '>Arkansas</option>
+				<option value="California"' . checkForSelected($selected,'California') . '>California</option>
+				<option value="Colorado"' . checkForSelected($selected,'Colorado') . '>Colorado</option>
+				<option value="Connecticut"' . checkForSelected($selected,'Connecticut') . '>Connecticut</option>
+				<option value="Delaware"' . checkForSelected($selected,'Delaware') . '>Delaware</option>
+				<option value="Florida"' . checkForSelected($selected,'Florida') . '>Florida</option>
+				<option value="Georgia"' . checkForSelected($selected,'Georgia') . '>Georgia</option>
+				<option value="Hawaii"' . checkForSelected($selected,'Hawaii') . '>Hawaii</option>
+				<option value="Idaho"' . checkForSelected($selected,'Idaho') . '>Idaho</option>
+				<option value="Illinois"' . checkForSelected($selected,'Illinois') . '>Illinois</option>
+				<option value="Indiana"' . checkForSelected($selected,'Indiana') . '>Indiana</option>
+				<option value="Iowa"' . checkForSelected($selected,'Iowa') . '>Iowa</option>
+				<option value="Kansas"' . checkForSelected($selected,'Kansas') . '>Kansas</option>
+				<option value="Kentucky"' . checkForSelected($selected,'Kentucky') . '>Kentucky</option>
+				<option value="Louisiana"' . checkForSelected($selected,'Louisiana') . '>Louisiana</option>
+				<option value="Maine"' . checkForSelected($selected,'Maine') . '>Maine</option>
+				<option value="Maryland"' . checkForSelected($selected,'Maryland') . '>Maryland</option>
+				<option value="Massachusetts"' . checkForSelected($selected,'Massachusetts') . '>Massachusetts</option>
+				<option value="Michigan"' . checkForSelected($selected,'Michigan') . '>Michigan</option>
+				<option value="Minnesota"' . checkForSelected($selected,'Minnesota') . '>Minnesota</option>
+				<option value="Mississippi"' . checkForSelected($selected,'Mississippi') . '>Mississippi</option>
+				<option value="Missouri"' . checkForSelected($selected,'Missouri') . '>Missouri</option>
+				<option value="Montana"' . checkForSelected($selected,'Montana') . '>Montana</option>
+				<option value="Nebraska"' . checkForSelected($selected,'Nebraska') . '>Nebraska</option>
+				<option value="Nevada"' . checkForSelected($selected,'Nevada') . '>Nevada</option>
+				<option value="New Hampshire"' . checkForSelected($selected,'New Hampshire') . '>New Hampshire</option>
+				<option value="New Jersey"' . checkForSelected($selected,'New Jersey') . '>New Jersey</option>
+				<option value="New Mexico"' . checkForSelected($selected,'New Mexico') . '>New Mexico</option>
+				<option value="New York"' . checkForSelected($selected,'New York') . '>New York</option>
+				<option value="North Carolina"' . checkForSelected($selected,'North Carolina') . '>North Carolina</option>
+				<option value="North Dakota"' . checkForSelected($selected,'North Dakota') . '>North Dakota</option>
+				<option value="Ohio"' . checkForSelected($selected,'Ohio') . '>Ohio</option>
+				<option value="Oklahoma"' . checkForSelected($selected,'Oklahoma') . '>Oklahoma</option>
+				<option value="Oregon"' . checkForSelected($selected,'Oregon') . '>Oregon</option>
+				<option value="Pennsylvania"' . checkForSelected($selected,'Pennsylvania') . '>Pennsylvania</option>
+				<option value="Rhode Island"' . checkForSelected($selected,'Rhode Island') . '>Rhode Island</option>
+				<option value="South Carolina"' . checkForSelected($selected,'South Carolina') . '>South Carolina</option>
+				<option value="South Dakota"' . checkForSelected($selected,'South Dakota') . '>South Dakota</option>
+				<option value="Tennessee"' . checkForSelected($selected,'Tennessee') . '>Tennessee</option>
+				<option value="Texas"' . checkForSelected($selected,'Texas') . '>Texas</option>
+				<option value="Utah"' . checkForSelected($selected,'Utah') . '>Utah</option>
+				<option value="Vermont"' . checkForSelected($selected,'Vermont') . '>Vermont</option>
+				<option value="Virginia"' . checkForSelected($selected,'Virginia') . '>Virginia</option>
+				<option value="Washington"' . checkForSelected($selected,'Washington') . '>Washington</option>
+				<option value="West Virginia"' . checkForSelected($selected,'West Virginia') . '>West Virginia</option>
+				<option value="Wisconsin"' . checkForSelected($selected,'Wisconsin') . '>Wisconsin</option>
+				<option value="Wyoming"' . checkForSelected($selected,'Wyoming') . '>Wyoming</option>
+			</optgroup>
+			<optgroup label="Districts">
+				<option value="District of Columbia"' . checkForSelected($selected,'District of Columbia') . '>District of Columbia</option>
+			</optgroup>
+			<optgroup label="Territories">
+				<option value="Guam">Guam</option>
+				<option value="Northern Mariana Islands"' . checkForSelected($selected,'Northern Mariana Islands') . '>Northern Mariana Islands</option>
+				<option value="Puerto Rico"' . checkForSelected($selected,'Puerto Rico') . '>Puerto Rico</option>
+				<option value="U.S. Virgin Islands"' . checkForSelected($selected,'U.S. Virgin Islands') . 'U.S. Virgin Islands</option>
+			</optgroup>
+		</select>';
+	}
+
+	protected static function countryFormSelect($name,$required=null,$selected=null){
+
+		if(!is_null($required)){
+			$required = ' required="required" ';
+		}
+
+		return '
+		<select name="' . $name . '"' . $required. ' class="form-control">
+			<optgroup label="Country">
+				<option value="USA"' . checkForSelected($selected,'USA') . '>USA</option>
+				<option value="Canada"' . checkForSelected($selected,'Canada') . '>Canada</option>
+				<option value="China"' . checkForSelected($selected,'China') . '>China</option>
+			</optgroup>
+		</select>';
+	}
+
+}
+
+?>

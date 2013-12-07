@@ -1,0 +1,51 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class orders extends home {
+
+	//page properties
+	public $title;
+	public $pageBody;
+	public $tab;
+	public $pfnc;
+	public $tabActive;
+
+	//product table properties
+	public $mpn;
+	public $manufacturer;
+	public $upc;
+	public $active;
+
+	//inventory properties
+	public $qty_on_hand;
+	public $prev_order;
+	public $next_order;
+
+	//product language properties
+	public $productTitle;
+	public $description;
+
+	//product pricing properties
+	public $cost;
+	public $dealer_price;
+	public $map_price;
+	
+	public static function checkSubmission(){
+	}
+
+	public function pageBody(){
+	}
+	
+
+	
+
+
+	///////////////////////////////////////////////////////////////////
+	//starting static database functions to be run on submission checks
+	///////////////////////////////////////////////////////////////////
+
+			
+	
+}
+
+?>

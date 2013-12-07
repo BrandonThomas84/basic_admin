@@ -1,0 +1,895 @@
+<?php /* FILEVERSION: v1.0.1b */ ?>
+<?php
+
+class inventory extends home {
+
+	//basic object properties
+	public $title;
+	public $tabActive;
+
+	//product properties
+	public $pid;
+	public $mpn;
+	public $manufacturer;
+	public $active;
+	public $qty_on_hand;
+	public $prev_order;
+	public $next_order;
+	
+	public static function checkSubmission(){
+
+		//checking for single inventory update submission
+		if(isset($_POST['inventory_ValueUpdate'])){
+
+			//running update / insert
+			self::updateSingleInventoryDatabaseValue();
+			header('Location: ' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&msg=inventorySuccess');	
+
+		}
+
+		//checking for inventory scanning submissions
+		if(isset($_POST['inventory_scan'])){
+
+			//run inventory scan update
+			self::scanInOutInventory();
+
+		}
+
+		//checking for uploaded inventory file
+		if(isset($_POST['uploadInventory'])){
+
+			//run inventory upload script
+			$msg = self::uploadInventory();
+
+			header('Location: ' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&msg=' . $msg);
+
+		}
+
+		//checking for incorrect page number submisison based on total available values
+		if(isset($_GET['ppg']) && $_GET['pg'] > 1){
+
+			$total = ($_GET['ppg'] * $_GET['pg']);
+
+			if( self::countInventory() < $total ){
+
+				$newpage = floor(self::countInventory() / $_GET['ppg']);
+				if($newpage == 0 ){
+
+					$newpage = $newpage+1;
+				}
+
+				if($newPage !== $_GET['pg']){
+					header('Location: ' . _ROOT_ . '/index.php?tab=inventory&ifnc=vi&pg=' . $newpage . '&ppg=' . $_GET['ppg']);						
+				}
+			}
+		}
+	}
+	public function pageBody(){
+
+		//checking for selected function
+		if(isset($_GET['ifnc'])){
+
+
+			$function = $_GET['ifnc'];
+
+			//checking if add inventory function has been selected 
+			if($function == 'ni'){
+
+				//setting the title and body vars to be passed to the parent home class for compile
+				$body = $this->addInventory();
+
+			} elseif($function == 'vi') {
+
+				//setting the title and body vars to be passed to the parent home class for compile
+				$body = $this->viewInventory();
+
+			}
+
+		} else{
+
+			//if no function has been selected then return the compiled list of all the functions (control home)
+			$title = 'Select Inventory Function';
+			$body = $this->homePage();
+
+		}
+
+		//passing to parent home class compiler
+		return parent::tabPage($this->title,$body);
+	}
+
+	public function homePage(){
+
+		$return = array();
+		
+
+		//add all buttons to this area
+		array_push($return, '<div class="row-fluid control-row">');
+		array_push($return, $this->addInventory('button'));
+		array_push($return, $this->viewInventory('button'));
+		array_push($return, $this->rowSep);
+		array_push($return, '</div>');
+
+		//returning the imploded array
+		return implode(null,$return);
+	}
+
+	public function addInventory($type='body'){
+
+		//checkes if the current user has access to the method (all method functions should be within this 'IF')
+		if(functionRights::checkRights(__METHOD__,'method')){
+
+			//checking if call was for the activation button
+			if($type == 'button'){
+				
+				$this->title = 'Inventory Manager';
+				$html = '
+				<div class="span6">
+					<a href="index.php?tab=inventory&ifnc=ni" title="Click here to enter new Inventory" class="btn form-control">Add Inventory</a>
+				</div>';
+
+				return $html;
+
+			} elseif($type == 'body') {
+
+				//if a product ID for editing has not been selected
+				if(isset($_GET['pid'])){
+
+					//display single product update
+					return $this->updateSingleProductInventory();
+
+				} elseif( isset($_GET['qi'])) {
+
+					//display quick iventory add
+					return $this->quickScanInventory();
+
+				} else {
+
+					//display inventory functions selection
+					return $this->selectInventoryMethod();
+					
+				}
+			}
+		}	
+	}
+
+	protected function selectInventoryMethod(){
+
+		$return = array();
+
+		//setting section title value
+		$this->title = 'Select an Inventory Entry Method';
+
+		$html= '
+		<div class="row-fluid">
+			<div class="span12">
+				<h3>Single Product Inventory Update</h3>
+				<form method="get" name="inventory_SelectProduct">
+					<div class="row-fluid">
+						<div class="span6">
+							<input type="hidden" name="tab" value="' . $_GET['tab'] . '">
+							<input type="hidden" name="ifnc" value="' . $_GET['ifnc'] . '">
+							<select name="pid" class="form-control">';
+
+		array_push($return, $html);
+
+		foreach(self::getProducts() as $product){
+
+			//checking if product has been selected
+			if(isset($_GET['pid']) && $_GET['pid'] == $product[0]){
+				$selected = ' selected ';
+			} else {
+				$selected = null;
+			}
+
+			$option = '<option value="' . $product[0] . '"' . $selected . '>' . $product[1] . ' - ' . $product[2] . '</option>';
+			array_push($return,$option);
+		}
+
+				
+		$html = '			</select>
+						</div>
+						<div class="span6">
+							<input type="submit" value="Select Product" class="btn btn-success form-control">
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+		<div class="clearfix"></div>';
+
+		array_push($return,$html);
+
+		$html ='
+		<div class="row-fluid">
+			<div class="span12">
+				<h3>Scan Inventory In/Out</h3>
+			</div>
+		</div>
+		<div class="row-fluid">
+			<div class="row-fluid">
+				<div class="span6" style="padding: 0 28px 0 0;">
+					<a href="' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=in" title="Scan In Inventory" class="btn btn-success form-control">Scan In Inventory</a>
+				</div>
+				<div class="span6 form" style="padding: 0 28px 0 0;">
+					<a href="' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=out" title="Scan Out Inventory" class="btn btn-danger form-control">Scan Out Inventory</a>
+				</div>
+			</div>
+		</div>';
+
+		array_push($return,$html);
+
+		//checking to see if user has rights to upload
+		if(functionRights::checkRights('uploadInventory','action') == true){
+			$html ='
+			<div class="row-fluid">
+				<div class="span12">
+					<h3>Upload Inventory Sheet</h3>
+				</div>
+			</div>
+			<div class="row-fluid">
+				<form name="uploadInventory" method="post" enctype="multipart/form-data">
+				<div class="span6">
+					<input type="hidden" name="uploadInventory" value="true">
+					<input type="file" class="form-control" name="inventoryFile">
+				</div>
+				<div class="span6">
+					<input type="submit" class="form-control btn btn-info" value="Upload CSV File">
+				</div>
+				</form>
+			</div>
+			<div class="clearfix spacer"></div>';
+
+			array_push($return,$html);	
+		}
+		
+
+		return implode(null,$return);
+	}
+
+	protected function updateSingleProductInventory(){
+
+		global $mysqli;
+
+		$return = array();
+
+		//setting section title value
+		$this->title = 'Enter Inventory Information';
+		
+		//setting object property
+		$this->pid = $_GET['pid'];
+
+		//preparing database query
+		if($stmt = $mysqli->prepare('SELECT `product`.`id`,
+			    `product`.`mpn`,
+			    `product`.`manufacturer`,
+			    `product`.`active`,
+				`product_inventory`.`qty_on_hand`,
+				`product_inventory`.`prev_order`,
+				`product_inventory`.`next_order`
+			FROM `' . _DB_NAME_ . '`.`product` 
+				INNER JOIN `' . _DB_NAME_ . '`.`product_inventory`
+				ON `product`.`id` = `product_inventory`.`product_id` 
+			WHERE `product`.`id` = ?')){
+
+			$stmt->bind_param('i',$this->pid);
+			$stmt->execute();
+			$stmt->bind_result($id,$mpn,$manufacturer,$active,$qty_on_hand,$prev_order,$next_order);			
+			
+			while($stmt->fetch()){
+
+				$this->mpn = $mpn;
+				$this->manufacturer = $manufacturer;
+				$this->active = $active;
+				$this->qty_on_hand = $qty_on_hand;
+				$this->prev_order = $prev_order;
+				$this->next_order = $next_order;
+			}
+
+			//adding form to array
+			$html = '
+				<form name="inventory_ValueUpdate" method="post">
+					<div class="row-fluid">
+						<div class="span4">
+
+							<input type="hidden" name="inventory_ValueUpdate" value="true">
+							<input type="hidden" name="pid" value="' . $this->pid . '">
+							<input type="hidden" name="tab" value="' . $_GET['tab'] . '">
+							<input type="hidden" name="ifnc" value="' . $_GET['ifnc'] . '">
+							<input type="hidden" name="prev_order" value="' . $this->prev_order . '">
+							<label class="form-label" for="product_ID_Display">Product ID Number</label>
+							<input type="text" class="form-control" disabled="disabled" name="product_ID_Display" value="' . $this->pid . '">
+						</div>
+						<div class="span4">
+							
+							<label class="form-label" for="qty_on_hand">Quantity Available</label>
+							<input type="text" class="form-control" name="qty_on_hand" value="' . $this->qty_on_hand . '" required="required">
+
+						</div>
+						<div class="span4">
+
+							<label class="form-label" for="prev_orderDisplay">Previous Order Date</label>
+							<input type="text" class="form-control" name="prev_prev_orderDisplay" disabled="disabled" value="' . date('m/d/Y',strtotime($this->prev_order)) . '">
+
+							<label class="form-label" for="next_order">Next Order Date</label>
+							<script type="text/javascript">
+							    $(window).load(function()
+							    {
+							        $(\'#mydate\').glDatePicker({
+									    showAlways: false,
+									    allowMonthSelect: true,
+									    allowYearSelect: true,
+									    prevArrow: \'<\',
+									    nextArrow: \'>\',
+									    cssName: \'flatwhite\',
+									    selectableDOW: [1, 2, 3, 4, 5]
+									});
+							    });
+							</script>
+							<!-- http://glad.github.io/glDatePicker/ -->
+							<input type="text" class="form-control" id="mydate" gldp-id="mydate" name="next_order" value="' . date('m/d/Y',strtotime($this->next_order)) . '">
+						    <div gldp-el="mydate" style="width: 300px; height:250px; position:absolute; top:70px; left:100px;">
+						    </div>
+
+						</div>
+						<div class="clearfix"></div>
+						<div class="row-fluid">
+							<div class="span6 offset3">
+								<input type="submit" class="btn btn-success form-control" value="Update Inventory">
+							</div>
+						</div>
+						<div class="clearfix"></div>
+					</div>
+				</form>';
+
+			//push values to return array
+			array_push($return,$html);
+
+		} else {
+
+			//if query failure
+			array_push($return,'mysql Error:' . $stmt->error);
+		}
+	
+		return implode(null,$return);
+	}
+
+	protected function viewInventory($type='body'){
+
+		//checkes if the current user has access to the method (all method functions should be within this 'IF')
+		if(functionRights::checkRights(__METHOD__,'method')){
+
+			//checking if call was for the activation button
+			if($type == 'button'){
+				
+				$this->title = 'Available Inventory';
+				$html = '
+				<div class="span6">
+					<a href="index.php?tab=inventory&ifnc=vi" title="Click here to enter view inventory levels" class="btn form-control">View Inventory</a>
+				</div>';
+
+				return $html;
+
+			} elseif($type == 'body') {
+
+				//setting section title value
+				$this->title = 'Available Product Inventory';
+
+				return '
+				<div class="span12">
+					<div class="row-fluid invHeader">
+						<div class="span1">
+							<p>Product ID</p>
+						</div>
+						<div class="span2">
+							<p>Manufacturer</p>
+						</div>
+						<div class="span2">
+							<p>MPN</p>
+						</div>
+						<div class="span3">
+							<p>UPC</p>
+						</div>
+						<div class="span2">
+							<p>Quantity On Hand</p>
+						</div>
+						<div class="span2">
+							<p>Next Order Date</p>
+						</div>
+					</div>
+					' . $this->displayInventory() . '
+				</div>';
+			}
+		}	
+	}
+
+
+	protected function quickScanInventory(){
+
+		$return = array();
+
+		//setting the selected match by value, you can change the default selected value on initial page load by changing the matchBy value here in the else 
+		if(isset($_GET['mtchb'])){
+
+			$matchBy = $_GET['mtchb'];
+
+		} else {
+
+			$matchBy = 'mpn';
+
+		}
+
+		//setting the header "warning" that informs the user which direction they are scanning inventory to
+		if($_GET['qi'] == 'in'){
+
+			$header = '<div class="alert alert-success page-instruction"><div class="alert-body">Scanning In Inventory<br><span class="scan-switch"><a href="' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=out&mtchb=' . $matchBy . '" title="Switch to \'Scan Out\' Mode">Switch to "Scan Out" Mode</a></span></div></div>';
+
+			$help = '<p>Scan the barcode on the product to increase inventory value by 1</p>';
+
+		} elseif($_GET['qi'] == 'out'){
+
+			$header = '<div class="alert alert-error page-instruction"><div class="alert-body"><span class="scan-switch"><a href="' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=in&mtchb=' . $matchBy . '" title="Switch to \'Scan In\' Mode">Switch to "Scan In" Mode</a></span>Scanning Out Inventory</div></div>';
+
+			$help = '<p>Scan the barcode on the product to decrease inventory value by 1</p>';
+
+		}
+
+		//adding header warning to the array
+		array_push($return,$header);
+
+		
+		//creating the match by option list
+		$optionList = array();
+
+		$matches = array(
+			'mpn' => 'MPN',
+			'upc' => 'UPC',
+			'id'  => 'Product Database ID'
+			);
+
+		foreach($matches as $match){
+
+			if($matchBy == array_search($match,$matches)){
+				$selected = ' SELECTED ';
+			} else {
+				$selected = null;
+			}
+
+			$value = '<option value="' . array_search($match,$matches) . '"'. $selected . '>' . $match . '</option>';
+
+			array_push($optionList, $value);
+		}
+
+		$optionList = implode(null,$optionList);
+		
+
+		$inventoryDirection = $_GET['qi'];
+
+		$html = '
+			<script>
+				$(function() {
+				  $("#inventoryScan").focus();
+				});
+			</script>
+			<form name="inventory_scan" method="post">
+				<div class="row-fluid">
+					<div class="span6">
+						' . $help . '
+					</div>
+					<div class="span6">
+						<input type="hidden" name="inventory_scan" value="true">
+						<input type="hidden" name="direction" value="' . $inventoryDirection . '">
+						<input type="text" class="form-control" name="product_id" required="required" id="inventoryScan" tabindex="1">
+					</div>
+				</div>
+				<div class="clearfix"></div>
+				<div class="row-fluid">
+					<div class="span6">
+						<p>What are you scanning?</p>
+					</div>
+					<div class="span6">
+						<select name="matchBy" class="form-control">
+						' . $optionList .'
+						</select>
+					</div>
+				</div>
+				<div class="clearfix"></div>
+			</form>';
+
+		array_push($return,$html);
+
+		//return values
+		return implode(null,$return);
+
+	}
+
+	protected function displayInventory(){
+
+		$return = array();	
+
+		//$product_id, $manufacturer, $mpn, $upc, $qty_on_hand, $next_order
+		$products = self::getInventory();
+
+		foreach($products as $product){
+			$value = '
+			<div class="row-fluid inventory-row">
+				<div class="span1">
+					<p class="invLabel">Product ID</p>
+					<p class="invValue form-control">' . $product[0] . '</p>
+				</div>
+				<div class="span2">
+					<p class="invLabel">Manufacturer</p>
+					<p class="invValue form-control">' . $product[1] . '</p>
+				</div>
+				<div class="span2">
+					<p class="invLabel">MPN</p>
+					<p class="invValue form-control">' . $product[2] . '</p>
+				</div>
+				<div class="span3">
+					<p class="invLabel">UPC</p>
+					<p class="invValue form-control">' . $product[3] . '</p>
+				</div>
+				<div class="span2">
+					<p class="invLabel">Quantity On Hand</p>
+					<p class="invValue form-control">' . $product[4] . '</p>
+				</div>
+				<div class="span2">
+					<p class="invLabel">Next Order Date</p>
+					<p class="invValue form-control">' . date('m/d/Y', strtotime($product[5])) . '</p>
+				</div>
+			</div>
+			';
+
+			array_push($return,$value);
+		}
+
+		return implode(null,$return);
+
+	}
+
+
+	///////////////////////////////////////////////////////////////////
+	//starting static database functions to be run on submission checks
+	///////////////////////////////////////////////////////////////////
+
+	public static function getProducts($active=1){
+
+		global $mysqli;
+
+		$return = array();
+
+		if($stmt = $mysqli->prepare('SELECT DISTINCT `product`.`id`, `product`.`mpn`, `product`.`manufacturer`, `product`.`upc`, `product`.`active` FROM `' . _DB_NAME_ . '`.`product` WHERE `product`.`active` = ?')){
+
+			$stmt->bind_param('d',$active);
+			$stmt->execute();
+			$stmt->bind_result($id,$mpn,$manufacturer,$upc,$active);			
+			
+			while($stmt->fetch()){
+
+				//creating individual array for each product containing all information
+				$product = array();
+
+				//adding all information to the product array
+				array_push($product,$id);
+				array_push($product,$mpn);
+				array_push($product,$manufacturer);
+				array_push($product,$upc);
+				array_push($product,$active);
+
+				//adding compiled product array to array of products
+				array_push($return,$product);
+			}
+
+		} else {
+
+			array_push($return,'mysql Error:' . $stmt->error);
+		}
+		
+		return $return;
+	}
+
+	public static function productMatch($needle,$matchBy){
+		//creating an array of product id's to check if submitted product is a valid one
+		$products = array();
+
+		if($matchBy == 'mpn'){
+			$matchValue = 1;
+		} elseif($matchBy == 'upc'){
+			$matchValue = 3;
+		} elseif($matchBy == 'id'){
+			$matchValue = 0;
+		}
+
+		foreach(self::getProducts() as $product){
+			array_push($products, $product[$matchValue]);
+		}
+
+		if(in_array($needle,$products)){
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public static function checkForExistingInventoryValue($product_id){
+
+		global $mysqli;
+
+		//checking if there is already a value in the inventory database
+		$stmt = $mysqli->prepare('SELECT `product_inventory`.`qty_on_hand` FROM `' . _DB_NAME_ . '`.`product_inventory` WHERE `product_id` = ?');
+		$stmt->bind_param('i',$product_id);
+		$stmt->execute();
+		$stmt->store_result();
+
+		if($stmt->num_rows > 0){
+			
+			$stmt->bind_result($returnQty);
+
+			while($stmt->fetch()){
+				return $returnQty;	
+			}
+			
+
+		} else {
+			return false;
+		}
+	}
+
+	public static function updateSingleInventoryDatabaseValue(){
+
+		global $mysqli;
+
+		if(is_null($_POST['next_order'])){
+			$next_order = '';
+		} else { 
+			$next_order = date('Y-m-d H:i:s',strtotime($_POST['next_order'])); 
+		}
+		
+		if(is_null($_POST['prev_order'])){ 
+			$prev_order = '';
+		} else { 
+			$prev_order = date('Y-m-d H:i:s',strtotime($_POST['prev_order'])); 
+		}
+
+		//checks if there is already an inventory value in the database
+		if(self::checkForExistingInventoryValue($_POST['pid'])){
+
+			$stmt = $mysqli->prepare('UPDATE  `' . _DB_NAME_ . '`.`product_inventory` SET `qty_on_hand` = ?, `next_order` = ?, `prev_order` = ? WHERE `product_id` = ?');
+
+		} else {
+
+			$stmt = $mysqli->prepare('INSERT INTO  `' . _DB_NAME_ . '`.`product_inventory` ( `qty_on_hand`,`next_order`,`prev_order`,`product_id`) VALUES (?,?,?,?)');
+		}
+
+		$stmt->bind_param('issi',$_POST['qty_on_hand'],$next_order,$prev_order,$_POST['pid']);
+		$stmt->execute();
+
+	}
+
+	public static function scanInOutInventory(){
+
+		global $mysqli;		
+
+		//checking if submitted product is a valid product in the database
+		if(self::productMatch($_POST['product_id'],$_POST['matchBy'])){
+
+			//checks if there is already an inventory value in the database
+			if(self::checkForExistingInventoryValue($_POST['product_id'])){
+
+				$invValue = self::checkForExistingInventoryValue($_POST['product_id']);
+
+				$stmt = $mysqli->prepare('UPDATE  `' . _DB_NAME_ . '`.`product_inventory` SET `qty_on_hand` = ? WHERE `product_id` = ?');
+
+				$returnmsg = 'updatedInventory';
+
+			} else {
+
+				$invValue = 0;
+
+				$stmt = $mysqli->prepare('INSERT INTO  `' . _DB_NAME_ . '`.`product_inventory` ( `qty_on_hand`,`product_id`) VALUES (?,?)');
+
+				$returnmsg = 'addedInventory';
+			}
+			
+			//checking which direction inventory is being edited (in / out)
+			if($_POST['direction'] == 'in'){
+
+				$invValue = $invValue + 1;
+			
+			} else { 
+
+				$invValue = $invValue - 1; 
+			}
+
+			//binding prepared inventory values
+			$stmt->bind_param('ii',$invValue, $_POST['product_id']);
+
+			$stmt->execute();
+
+			header('Location: ' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=' . $_POST['direction'] . '&mtchb=' . $_POST['matchBy'] . '&msg='. $returnmsg);
+
+		} else {
+
+			header('Location: ' . _ROOT_ . '/index.php?tab=inventory&ifnc=ni&qi=' . $_POST['direction'] . '&mtchb=' . $_POST['matchBy'] . '&msg=invalidProduct');
+
+		}		
+	}
+
+	public static function uploadInventory(){
+
+		global $mysqli;
+
+		//The original name of the file on the client machine.
+		$fileName = $_FILES['inventoryFile']['name'];
+
+		//The mime type of the file, if the browser provided this information. An example would be "image/gif".
+		$fileType = $_FILES['inventoryFile']['type'];
+
+		//The size, in bytes, of the uploaded file.
+		$fileSize = $_FILES['inventoryFile']['size'];
+		
+		//The temporary filename of the file in which the uploaded file was stored on the server.
+		$fileTempName = $_FILES['inventoryFile']['tmp_name'];
+		
+		//The error code associated with this file upload.
+		if ($_FILES["inventoryFile"]["error"] > 0) {
+            
+            return "Return Code: " . $_FILES["file"]["error"];
+
+        } else {
+
+        	//return $fileType;
+        	//check that uploaded file is a csv
+        	$acceptedFiletypes = array('application/vnd.ms-excel','text/csv');
+        	
+        	if(!in_array($fileType,$acceptedFiletypes)){
+        		
+        		return 'wrongFileType';
+
+        	} else {
+
+
+
+
+        		$header = null;
+			    $data = array();
+			    $columns = array();
+        		$products = array();
+        		$query = array();
+
+        		//creating array of file information with ehaders as keys
+			    if (($file = fopen($fileTempName,'r+')) !== false){
+
+			        while (($row = fgetcsv($file, 1000, ',')) !== false){
+
+			            if(is_null($header)){
+
+			            	$header = $row;
+
+			            } else{
+
+			                $data[] = array_combine($header, $row);
+			            }
+			        }
+
+			        fclose($file);
+			    }
+
+			    //running through each row of data in the file
+			    foreach ($data as $row) {
+
+			    	//adding beginning of values statement to the query arry
+			    	array_push($query,' (');
+			    	
+			    	foreach($row as $field){
+
+			    		//add key to column array
+			    		$columnName = array_search($field,$row);
+			    		
+			    		array_push($columns, $columnName);
+
+			    		if(is_null($field)){
+
+			    			$value = 'NULL';
+
+			    		} else {
+
+			    			$value = '\'' . $field . '\'';	
+			    		}
+
+			    		if($columnName == 'product_id'){
+			    			array_push($products,$field);
+			    		}
+			    		
+			    		
+			    		array_push($query,$value);
+			    	}
+			    	
+			    	//adding ending of values statement to the query arry
+			    	array_push($query,')');
+			    	
+			    }
+
+			    $columns = array_unique($columns);
+			    $columns = implode(', ',$columns);
+			    $columns = 'INSERT INTO  `' . _DB_NAME_ . '`.`product_inventory`  (' . $columns . ') VALUES ';
+
+			    
+			    $query = implode(', ',$query);
+			    $query = $columns . str_replace(', )',')',str_replace('(,','(',str_replace('\'\'', 'NULL',$query)));
+
+			    
+			    $stmt = $mysqli->prepare('DELETE FROM `' . _DB_NAME_ . '`.`product_inventory` WHERE `product_id` IN (' . implode(',',$products) . ')');
+
+			    $stmt->execute();
+
+			    $stmt->close();
+
+			    $stmt = $mysqli->prepare($query);
+
+			    $stmt->execute();
+
+			    $stmt->close();
+
+			    return 'successfulUpload';
+				
+
+        	}
+        	
+        }
+
+	}
+
+	public static function countInventory(){
+		global $mysqli;
+
+		if($stmt = $mysqli->prepare('SELECT DISTINCT `product`.`id`, `product`.`manufacturer`, `product`.`mpn`, `product`.`upc`, `product_inventory`.`qty_on_hand`, `product_inventory`.`next_order` FROM `' . _DB_NAME_ . '`.`product` INNER JOIN `' . _DB_NAME_ . '`.`product_inventory` ON `product`.`id` = `product_inventory`.`product_id` WHERE `product`.`active` = 1')){
+
+			$stmt->execute();
+			$stmt->store_result();
+
+		} 
+
+		return $stmt->num_rows;
+	}
+
+	public static function getInventory(){
+		global $mysqli;	
+
+		$return = array();	
+
+		if(isset($_GET['ppg']) && isset($_GET['pg'])){
+			
+			$run = $_GET['ppg'];
+
+		} else { 
+
+			$run = 10;
+		}
+
+		if(isset($_GET['pg'])){
+
+			$start = ( $_GET['pg'] * $run ) - ( $run );
+		} else {
+
+			$start = 0;
+		}
+
+		if($stmt = $mysqli->prepare('SELECT DISTINCT `product`.`id`, `product`.`manufacturer`, `product`.`mpn`, `product`.`upc`, `product_inventory`.`qty_on_hand`, `product_inventory`.`next_order` FROM `' . _DB_NAME_ . '`.`product` INNER JOIN `' . _DB_NAME_ . '`.`product_inventory` ON `product`.`id` = `product_inventory`.`product_id` WHERE `product`.`active` = 1 LIMIT ?,?')){
+
+			$stmt->bind_param('ii',$start,$run);
+			$stmt->bind_result($product_id, $manufacturer, $mpn, $upc, $qty_on_hand, $next_order);
+			$stmt->execute();
+
+
+			while($row = $stmt->fetch()){
+				array_push($return,array($product_id, $manufacturer, $mpn, $upc, $qty_on_hand, $next_order));
+			}
+
+			return $return;
+
+		}
+	}			
+	
+}
+
+?>
